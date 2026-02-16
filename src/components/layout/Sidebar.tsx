@@ -9,6 +9,7 @@ import {
     Database,
     CheckCircle,
     FileBarChart,
+    MapPin,
 } from 'lucide-react';
 
 const menuItems = [
@@ -18,6 +19,7 @@ const menuItems = [
     { path: '/crf', icon: ClipboardList, label: 'CRF' },
     { path: '/parameter-assignment', icon: FlaskConical, label: 'Parameter Assignment' },
     { path: '/data-entry', icon: Database, label: 'Data Entry' },
+    { path: '/environmental-sampling', icon: MapPin, label: 'Environmental Sampling' },
     { path: '/review-sign', icon: CheckCircle, label: 'Review & Sign' },
     { path: '/report-generation', icon: FileBarChart, label: 'Report Generation' },
 ];

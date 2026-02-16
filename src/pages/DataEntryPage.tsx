@@ -3,44 +3,97 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
+import { Select } from '../components/ui/Select';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/Table';
 import { useWorkflow } from '../context/WorkflowContext';
 
 export const DataEntryPage: React.FC = () => {
-    const { samples, assignmentsLocked, resultsStatus, updateSampleResult, submitResults } = useWorkflow();
+    const { crfs, getCRFsByStatus, addTestResult, updateCRFStatus } = useWorkflow();
+    const [selectedCRFId, setSelectedCRFId] = useState<string>('');
+    const [results, setResults] = useState<any[]>([]);
+    const [isSubmitted, setIsSubmitted] = useState(false);
 
-    const [localResults, setLocalResults] = useState(
-        samples.map((s) => ({
-            ref: s.ref,
-            value: s.testValue || '',
-            remarks: s.remarks || '',
-        }))
-    );
+    // Get CRFs with status='assigned' (parameters locked, ready for testing)
+    const assignedCRFs = getCRFsByStatus('assigned');
+    const selectedCRF = crfs.find(c => c.id === selectedCRFId);
 
-    const handleValueChange = (ref: string, value: string) => {
-        setLocalResults((prev) =>
-            prev.map((r) => (r.ref === ref ? { ...r, value } : r))
-        );
+    const handleCRFChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const crfId = e.target.value;
+        setSelectedCRFId(crfId);
+        setIsSubmitted(false);
+
+        if (crfId) {
+            const crf = crfs.find(c => c.id === crfId);
+            if (crf) {
+                // Initialize results for each sample and parameter
+                const newResults = crf.samples.flatMap(sample =>
+                    crf.testParameters.map(paramName => ({
+                        crfId: crf.id,
+                        sampleId: sample.id,
+                        sampleDescription: sample.description,
+                        parameter: paramName,
+                        testValue: '',
+                        remarks: '',
+                        testedBy: '',
+                        testDate: new Date().toISOString().split('T')[0],
+                    }))
+                );
+                setResults(newResults);
+            }
+        } else {
+            setResults([]);
+        }
     };
 
-    const handleRemarksChange = (ref: string, remarks: string) => {
-        setLocalResults((prev) =>
-            prev.map((r) => (r.ref === ref ? { ...r, remarks } : r))
-        );
+    const handleValueChange = (index: number, value: string) => {
+        const updated = [...results];
+        updated[index].testValue = value;
+        setResults(updated);
+    };
+
+    const handleRemarksChange = (index: number, remarks: string) => {
+        const updated = [...results];
+        updated[index].remarks = remarks;
+        setResults(updated);
+    };
+
+    const handleTestedByChange = (index: number, testedBy: string) => {
+        const updated = [...results];
+        updated[index].testedBy = testedBy;
+        setResults(updated);
     };
 
     const handleSubmit = () => {
-        localResults.forEach((result) => {
-            updateSampleResult(result.ref, result.value, result.remarks);
+        if (!selectedCRFId) return;
+
+        // Validate all results have values
+        const incomplete = results.some(r => !r.testValue || !r.testedBy);
+        if (incomplete) {
+            alert('Please fill in all test values and tested by names');
+            return;
+        }
+
+        // Save all results
+        results.forEach(result => {
+            addTestResult(result);
         });
-        submitResults();
+
+        // Update CRF status to 'testing' then 'review'
+        updateCRFStatus(selectedCRFId, 'testing');
+        setTimeout(() => {
+            updateCRFStatus(selectedCRFId, 'review');
+        }, 100);
+
+        setIsSubmitted(true);
+        alert('Test results submitted successfully! CRF moved to Review status.');
     };
 
-    if (!assignmentsLocked) {
+    if (assignedCRFs.length === 0) {
         return (
             <div>
-                <h1 className="text-3xl font-bold text-gray-800 mb-8">Data Entry</h1>
+                <h1 className="text-3xl font-bold text-gray-800 mb-8">Data Entry - Chemist Results</h1>
                 <Card>
-                    <p className="text-gray-500">Please lock parameter assignments first before entering results.</p>
+                    <p className="text-gray-500">No CRFs available for data entry. CRFs must be in "Assigned" status with locked parameters.</p>
                 </Card>
             </div>
         );
@@ -50,60 +103,124 @@ export const DataEntryPage: React.FC = () => {
         <div>
             <div className="flex justify-between items-center mb-8">
                 <h1 className="text-3xl font-bold text-gray-800">Data Entry - Chemist Results</h1>
-                <Badge status={resultsStatus === 'Results Submitted' ? 'submitted' : 'pending'}>
-                    {resultsStatus}
-                </Badge>
+                {isSubmitted && <Badge status="approved">Results Submitted</Badge>}
             </div>
 
-            <div className="grid grid-cols-1 gap-6">
-                {samples.map((sample, index) => (
-                    <Card key={sample.ref}>
-                        <div className="flex items-center justify-between mb-4 pb-3 border-b">
+            <Card className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Select CRF</h3>
+                <Select
+                    label="CRF ID"
+                    value={selectedCRFId}
+                    onChange={handleCRFChange}
+                    options={[
+                        { value: '', label: 'Select a CRF' },
+                        ...assignedCRFs.map(crf => ({
+                            value: crf.id,
+                            label: `${crf.id} - ${crf.customer} (${crf.numberOfSamples} samples, ${crf.testParameters.length} parameters)`
+                        }))
+                    ]}
+                    required
+                />
+
+                {selectedCRF && (
+                    <div className="mt-6 p-4 bg-gray-50 rounded">
+                        <h4 className="font-semibold text-gray-800 mb-3">CRF Details</h4>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
-                                <h3 className="text-lg font-semibold text-gray-800">{sample.ref}</h3>
-                                <p className="text-sm text-gray-600">{sample.description}</p>
+                                <span className="text-gray-600">Customer:</span>
+                                <span className="ml-2 font-medium">{selectedCRF.customer}</span>
                             </div>
-                            <Badge status="pending">COD Testing</Badge>
+                            <div>
+                                <span className="text-gray-600">Type:</span>
+                                <span className="ml-2 font-medium">{selectedCRF.crfType}</span>
+                            </div>
+                            <div>
+                                <span className="text-gray-600">Sample Type:</span>
+                                <span className="ml-2 font-medium">{selectedCRF.sampleType}</span>
+                            </div>
+                            <div>
+                                <span className="text-gray-600">Status:</span>
+                                <Badge status="pending">Assigned - Ready for Testing</Badge>
+                            </div>
                         </div>
+                    </div>
+                )}
+            </Card>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Input
-                                label="Test Value (mg/L)"
-                                value={localResults[index]?.value || ''}
-                                onChange={(e) => handleValueChange(sample.ref, e.target.value)}
-                                placeholder="Enter test value"
-                                disabled={resultsStatus === 'Results Submitted'}
-                                required
-                            />
+            {selectedCRF && results.length > 0 && (
+                <Card>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Enter Test Results</h3>
+                    <p className="text-sm text-gray-600 mb-4">Fill in test values for each sample and parameter combination.</p>
+                    
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Sample ID</TableHead>
+                                    <TableHead>Description</TableHead>
+                                    <TableHead>Parameter</TableHead>
+                                    <TableHead>Test Value</TableHead>
+                                    <TableHead>Tested By</TableHead>
+                                    <TableHead>Test Date</TableHead>
+                                    <TableHead>Remarks</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {results.map((result, index) => (
+                                    <TableRow key={`${result.sampleId}-${result.parameter}`}>
+                                        <TableCell className="font-semibold">{result.sampleId}</TableCell>
+                                        <TableCell>{result.sampleDescription}</TableCell>
+                                        <TableCell className="font-medium">{result.parameter}</TableCell>
+                                        <TableCell>
+                                            <Input
+                                                type="text"
+                                                value={result.testValue}
+                                                onChange={(e) => handleValueChange(index, e.target.value)}
+                                                placeholder="Enter value"
+                                                disabled={isSubmitted}
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <Input
+                                                type="text"
+                                                value={result.testedBy}
+                                                onChange={(e) => handleTestedByChange(index, e.target.value)}
+                                                placeholder="Your name"
+                                                disabled={isSubmitted}
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <span className="text-sm">{new Date(result.testDate).toLocaleDateString()}</span>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Input
+                                                type="text"
+                                                value={result.remarks}
+                                                onChange={(e) => handleRemarksChange(index, e.target.value)}
+                                                placeholder="Optional remarks"
+                                                disabled={isSubmitted}
+                                            />
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
 
-                            <Input
-                                label="Remarks"
-                                value={localResults[index]?.remarks || ''}
-                                onChange={(e) => handleRemarksChange(sample.ref, e.target.value)}
-                                placeholder="Optional remarks"
-                                disabled={resultsStatus === 'Results Submitted'}
-                            />
-                        </div>
-
-                        <div className="mt-3 text-sm text-gray-600">
-                            <p><span className="font-medium">Method:</span> APHA 5220 D</p>
-                            <p><span className="font-medium">Parameter:</span> COD (Chemical Oxygen Demand)</p>
-                        </div>
-                    </Card>
-                ))}
-            </div>
-
-            <div className="mt-6 flex justify-end">
-                <Button
-                    onClick={handleSubmit}
-                    disabled={
-                        resultsStatus === 'Results Submitted' ||
-                        localResults.some((r) => !r.value)
-                    }
-                >
-                    {resultsStatus === 'Results Submitted' ? 'Results Submitted' : 'Submit All Results'}
-                </Button>
-            </div>
+                    <div className="mt-6 flex justify-end gap-3">
+                        {!isSubmitted ? (
+                            <Button
+                                onClick={handleSubmit}
+                                disabled={results.some((r) => !r.testValue || !r.testedBy)}
+                            >
+                                Submit All Results
+                            </Button>
+                        ) : (
+                            <Badge status="approved">Results Submitted - Moved to Review</Badge>
+                        )}
+                    </div>
+                </Card>
+            )}
         </div>
     );
 };

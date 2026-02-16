@@ -14,20 +14,7 @@ export const QuotationPage: React.FC = () => {
     const [selectedRequestId, setSelectedRequestId] = useState<string>('');
     const [signature, setSignature] = useState('');
     const [showPreview, setShowPreview] = useState(false);
-    const [isCustomMode, setIsCustomMode] = useState(false);
     const quotationRef = useRef<HTMLDivElement>(null);
-
-    // Custom quotation state
-    const [customQuotation, setCustomQuotation] = useState({
-        customer: '',
-        address: '',
-        contact: '',
-        email: '',
-        sampleType: '',
-        numberOfSamples: 1,
-        samplingType: 'One Time',
-        priority: 'Normal',
-    });
 
     const confirmedRequests = getConfirmedRequests();
     const selectedRequest = confirmedRequests.find(req => req.id === selectedRequestId);
@@ -69,103 +56,30 @@ export const QuotationPage: React.FC = () => {
         setParameters(updated);
     };
 
-    const handleAddParameter = () => {
-        setParameters([...parameters, {
-            name: '',
-            unitPrice: 0,
-            quantity: isCustomMode ? customQuotation.numberOfSamples : 1,
-            total: 0,
-        }]);
-    };
-
-    const handleRemoveParameter = (index: number) => {
-        setParameters(parameters.filter((_, i) => i !== index));
-    };
-
-    const handleParameterNameChange = (index: number, name: string) => {
-        const updated = [...parameters];
-        const paramData = mockParameters.find(p => p.name === name);
-        updated[index] = {
-            ...updated[index],
-            name,
-            unitPrice: paramData?.defaultPrice || updated[index].unitPrice,
-            total: (paramData?.defaultPrice || updated[index].unitPrice) * updated[index].quantity,
-        };
-        setParameters(updated);
-    };
-
     const grandTotal = parameters.reduce((sum, param) => sum + param.total, 0);
 
     const handleSaveQuotation = () => {
-        if (isCustomMode) {
-            // Validate custom quotation
-            if (!customQuotation.customer || !customQuotation.address || !customQuotation.contact || 
-                !customQuotation.email || !customQuotation.sampleType || parameters.length === 0) {
-                alert('Please fill all required fields and add at least one parameter');
-                return;
-            }
+        if (!selectedRequest) return;
 
-            const customId = `CUSTOM-${Date.now()}`;
-            const quotationData = {
-                requestId: customId,
-                customer: customQuotation.customer,
-                address: customQuotation.address,
-                contact: customQuotation.contact,
-                email: customQuotation.email,
-                sampleType: customQuotation.sampleType,
-                numberOfSamples: customQuotation.numberOfSamples,
-                samplingType: customQuotation.samplingType,
-                priority: customQuotation.priority,
-                parameters,
-                grandTotal,
-                signature,
-                approved: true,
-            };
+        const quotationData = {
+            requestId: selectedRequest.id,
+            customer: selectedRequest.customer,
+            address: selectedRequest.address,
+            contact: selectedRequest.contact,
+            email: selectedRequest.email,
+            parameters,
+            grandTotal,
+            signature,
+            approved: true,
+        };
 
-            createQuotation(quotationData);
-            alert('Custom quotation saved successfully!');
-            
-            // Reset form
-            setCustomQuotation({
-                customer: '',
-                address: '',
-                contact: '',
-                email: '',
-                sampleType: '',
-                numberOfSamples: 1,
-                samplingType: 'One Time',
-                priority: 'Normal',
-            });
-            setParameters([]);
-            setSignature('');
+        if (existingQuotation) {
+            updateQuotation(selectedRequest.id, quotationData);
         } else {
-            // From request mode
-            if (!selectedRequest) return;
-
-            const quotationData = {
-                requestId: selectedRequest.id,
-                customer: selectedRequest.customer,
-                address: selectedRequest.address,
-                contact: selectedRequest.contact,
-                email: selectedRequest.email,
-                sampleType: selectedRequest.sampleType,
-                numberOfSamples: selectedRequest.numberOfSamples,
-                samplingType: selectedRequest.samplingType,
-                priority: selectedRequest.priority,
-                parameters,
-                grandTotal,
-                signature,
-                approved: true,
-            };
-
-            if (existingQuotation) {
-                updateQuotation(selectedRequest.id, quotationData);
-            } else {
-                createQuotation(quotationData);
-            }
-
-            alert('Quotation saved successfully!');
+            createQuotation(quotationData);
         }
+
+        alert('Quotation saved successfully!');
     };
 
     const handleGeneratePDF = async () => {
@@ -195,171 +109,70 @@ export const QuotationPage: React.FC = () => {
         setShowPreview(true);
     };
 
+    if (confirmedRequests.length === 0) {
+        return (
+            <div>
+                <h1 className="text-3xl font-bold text-gray-800 mb-8">Quotation</h1>
+                <Card>
+                    <p className="text-gray-500">No confirmed requests available. Please confirm a request first.</p>
+                </Card>
+            </div>
+        );
+    }
+
     return (
         <div>
             <div className="flex justify-between items-center mb-8">
                 <h1 className="text-3xl font-bold text-gray-800">Quotation Management</h1>
-                {existingQuotation && !isCustomMode && (
+                {existingQuotation && (
                     <Badge status="approved">Quotation Created</Badge>
                 )}
             </div>
 
-            {/* Mode Toggle */}
-            <Card className="mb-6">
-                <div className="flex gap-4">
-                    <Button
-                        variant={!isCustomMode ? 'primary' : 'secondary'}
-                        onClick={() => {
-                            setIsCustomMode(false);
-                            setParameters([]);
-                            setSignature('');
-                        }}
-                    >
-                        From Request
-                    </Button>
-                    <Button
-                        variant={isCustomMode ? 'primary' : 'secondary'}
-                        onClick={() => {
-                            setIsCustomMode(true);
-                            setSelectedRequestId('');
-                            setParameters([]);
-                            setSignature('');
-                        }}
-                    >
-                        + Custom Quotation
-                    </Button>
-                </div>
-            </Card>
-
             {!showPreview ? (
                 <>
-                    {!isCustomMode ? (
-                        /* From Request Mode */
+                    <Card className="mb-6">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Select Confirmed Request</label>
+                        <select
+                            value={selectedRequestId}
+                            onChange={(e) => setSelectedRequestId(e.target.value)}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        >
+                            <option value="">-- Select a Request --</option>
+                            {confirmedRequests.map(req => (
+                                <option key={req.id} value={req.id}>
+                                    {req.id} - {req.customer} ({req.testParameters.join(', ')})
+                                </option>
+                            ))}
+                        </select>
+                    </Card>
+
+                    {selectedRequest && (
                         <>
                             <Card className="mb-6">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Select Confirmed Request</label>
-                                <select
-                                    value={selectedRequestId}
-                                    onChange={(e) => setSelectedRequestId(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                                >
-                                    <option value="">-- Select a Request --</option>
-                                    {confirmedRequests.map(req => (
-                                        <option key={req.id} value={req.id}>
-                                            {req.id} - {req.customer} ({req.testParameters.join(', ')})
-                                        </option>
-                                    ))}
-                                </select>
-                            </Card>
-                        </>
-                    ) : (
-                        /* Custom Quotation Mode */
-                        <Card className="mb-6">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-3 border-b">Customer Information</h3>
-                            <div className="grid grid-cols-2 gap-4">
-                                <Input
-                                    label="Customer Name"
-                                    value={customQuotation.customer}
-                                    onChange={(e) => setCustomQuotation({ ...customQuotation, customer: e.target.value })}
-                                    required
-                                />
-                                <Input
-                                    label="Address"
-                                    value={customQuotation.address}
-                                    onChange={(e) => setCustomQuotation({ ...customQuotation, address: e.target.value })}
-                                    required
-                                />
-                                <Input
-                                    label="Contact Person"
-                                    value={customQuotation.contact}
-                                    onChange={(e) => setCustomQuotation({ ...customQuotation, contact: e.target.value })}
-                                    required
-                                />
-                                <Input
-                                    label="Email"
-                                    type="email"
-                                    value={customQuotation.email}
-                                    onChange={(e) => setCustomQuotation({ ...customQuotation, email: e.target.value })}
-                                    required
-                                />
-                                <Input
-                                    label="Sample Type"
-                                    value={customQuotation.sampleType}
-                                    onChange={(e) => setCustomQuotation({ ...customQuotation, sampleType: e.target.value })}
-                                    placeholder="e.g., Water, Soil, Food"
-                                    required
-                                />
-                                <Input
-                                    label="Number of Samples"
-                                    type="number"
-                                    value={customQuotation.numberOfSamples.toString()}
-                                    onChange={(e) => setCustomQuotation({ ...customQuotation, numberOfSamples: parseInt(e.target.value) || 1 })}
-                                    required
-                                />
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Sampling Type</label>
-                                    <select
-                                        value={customQuotation.samplingType}
-                                        onChange={(e) => setCustomQuotation({ ...customQuotation, samplingType: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                                    >
-                                        <option>One Time</option>
-                                        <option>Monthly</option>
-                                        <option>Quarterly</option>
-                                        <option>Annually</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
-                                    <select
-                                        value={customQuotation.priority}
-                                        onChange={(e) => setCustomQuotation({ ...customQuotation, priority: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                                    >
-                                        <option>Normal</option>
-                                        <option>Urgent</option>
-                                        <option>Rush</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </Card>
-                    )}
-
-                    {(selectedRequest || isCustomMode) && (
-                        <>
-                            {!isCustomMode && selectedRequest && (
-                                <Card className="mb-6">
-                                    <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-3 border-b">Customer Details</h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <p className="text-sm text-gray-600">Customer Name</p>
-                                            <p className="font-medium">{selectedRequest.customer}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-gray-600">Address</p>
-                                            <p className="font-medium">{selectedRequest.address}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-gray-600">Contact Person</p>
-                                            <p className="font-medium">{selectedRequest.contact}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-gray-600">Email</p>
-                                            <p className="font-medium">{selectedRequest.email}</p>
-                                        </div>
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-3 border-b">Customer Details</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-sm text-gray-600">Customer Name</p>
+                                        <p className="font-medium">{selectedRequest.customer}</p>
                                     </div>
-                                </Card>
-                            )}
+                                    <div>
+                                        <p className="text-sm text-gray-600">Address</p>
+                                        <p className="font-medium">{selectedRequest.address}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-gray-600">Contact Person</p>
+                                        <p className="font-medium">{selectedRequest.contact}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-gray-600">Email</p>
+                                        <p className="font-medium">{selectedRequest.email}</p>
+                                    </div>
+                                </div>
+                            </Card>
 
                             <Card className="mb-6">
-                                <div className="flex justify-between items-center mb-4 pb-3 border-b">
-                                    <h3 className="text-lg font-semibold text-gray-800">Quotation Details (Editable)</h3>
-                                    {isCustomMode && (
-                                        <Button variant="secondary" onClick={handleAddParameter}>
-                                            + Add Parameter
-                                        </Button>
-                                    )}
-                                </div>
+                                <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-3 border-b">Quotation Details (Editable)</h3>
 
                                 <div className="overflow-x-auto mb-6">
                                     <table className="w-full">
@@ -369,28 +182,12 @@ export const QuotationPage: React.FC = () => {
                                                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Unit Price (LKR)</th>
                                                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Quantity</th>
                                                 <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Total (LKR)</th>
-                                                {isCustomMode && <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Action</th>}
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {parameters.map((param, index) => (
                                                 <tr key={index} className="border-t">
-                                                    <td className="px-4 py-3">
-                                                        {isCustomMode ? (
-                                                            <select
-                                                                value={param.name}
-                                                                onChange={(e) => handleParameterNameChange(index, e.target.value)}
-                                                                className="w-full px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
-                                                            >
-                                                                <option value="">Select Parameter</option>
-                                                                {mockParameters.map(p => (
-                                                                    <option key={p.name} value={p.name}>{p.name}</option>
-                                                                ))}
-                                                            </select>
-                                                        ) : (
-                                                            <span className="font-medium">{param.name}</span>
-                                                        )}
-                                                    </td>
+                                                    <td className="px-4 py-3 font-medium">{param.name}</td>
                                                     <td className="px-4 py-3">
                                                         <input
                                                             type="number"
@@ -408,16 +205,6 @@ export const QuotationPage: React.FC = () => {
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3 font-semibold text-primary-700">{param.total.toLocaleString()}</td>
-                                                    {isCustomMode && (
-                                                        <td className="px-4 py-3">
-                                                            <button
-                                                                onClick={() => handleRemoveParameter(index)}
-                                                                className="text-red-600 hover:text-red-800 font-medium"
-                                                            >
-                                                                Remove
-                                                            </button>
-                                                        </td>
-                                                    )}
                                                 </tr>
                                             ))}
                                             <tr className="border-t-2 border-gray-400 bg-primary-50">
@@ -489,17 +276,13 @@ export const QuotationPage: React.FC = () => {
                             <div>
                                 <h3 className="text-sm font-bold text-gray-800 mb-3 uppercase border-b border-gray-400 pb-1">To:</h3>
                                 <div className="ml-2 space-y-1">
-                                    <p className="font-bold text-gray-900">
-                                        {isCustomMode ? customQuotation.customer : selectedRequest?.customer}
-                                    </p>
-                                    <p className="text-sm text-gray-700">
-                                        {isCustomMode ? customQuotation.address : selectedRequest?.address}
-                                    </p>
+                                    <p className="font-bold text-gray-900">{selectedRequest?.customer}</p>
+                                    <p className="text-sm text-gray-700">{selectedRequest?.address}</p>
                                     <p className="text-sm text-gray-700 mt-3">
-                                        <span className="font-semibold">Attention:</span> {isCustomMode ? customQuotation.contact : selectedRequest?.contact}
+                                        <span className="font-semibold">Attention:</span> {selectedRequest?.contact}
                                     </p>
                                     <p className="text-sm text-gray-700">
-                                        <span className="font-semibold">Email:</span> {isCustomMode ? customQuotation.email : selectedRequest?.email}
+                                        <span className="font-semibold">Email:</span> {selectedRequest?.email}
                                     </p>
                                 </div>
                             </div>
@@ -507,9 +290,7 @@ export const QuotationPage: React.FC = () => {
                                 <div className="space-y-3 text-sm">
                                     <div className="flex">
                                         <span className="font-bold text-gray-800 w-32">Quotation No:</span>
-                                        <span className="text-gray-900">
-                                            {isCustomMode ? `CUSTOM-${Date.now()}` : selectedRequest?.id}
-                                        </span>
+                                        <span className="text-gray-900">{selectedRequest?.id}</span>
                                     </div>
                                     <div className="flex">
                                         <span className="font-bold text-gray-800 w-32">Date:</span>

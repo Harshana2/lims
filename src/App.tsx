@@ -9,6 +9,7 @@ import { QuotationPage } from './pages/QuotationPage';
 import { CRFPage } from './pages/CRFPage';
 import { ParameterAssignmentPage } from './pages/ParameterAssignmentPage';
 import { DataEntryPage } from './pages/DataEntryPage';
+import { EnvironmentalSamplingPage } from './pages/EnvironmentalSamplingPage';
 import { ReviewSignPage } from './pages/ReviewSignPage';
 import { ReportGenerationPage } from './pages/ReportGenerationPage';
 
@@ -25,6 +26,7 @@ function App() {
             <Route path="/crf" element={<CRFPage />} />
             <Route path="/parameter-assignment" element={<ParameterAssignmentPage />} />
             <Route path="/data-entry" element={<DataEntryPage />} />
+            <Route path="/environmental-sampling" element={<EnvironmentalSamplingPage />} />
             <Route path="/review-sign" element={<ReviewSignPage />} />
             <Route path="/report-generation" element={<ReportGenerationPage />} />
           </Route>
