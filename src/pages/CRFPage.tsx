@@ -8,7 +8,7 @@ import { SignatureCanvas } from '../components/SignatureCanvas';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/Table';
 import { useWorkflow } from '../context/WorkflowContext';
 import { mockCustomers, mockParameters, sampleTypes, samplingTypes, priorities } from '../data/mockData';
-import { Edit, Eye } from 'lucide-react';
+import { Edit, Eye, Camera } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -18,7 +18,11 @@ export const CRFPage: React.FC = () => {
     const [editingCRF, setEditingCRF] = useState<string | null>(null);
     const [showPreview, setShowPreview] = useState(false);
     const [previewCRFId, setPreviewCRFId] = useState<string | null>(null);
+    const [showCamera, setShowCamera] = useState(false);
     const crfRef = useRef<HTMLDivElement>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
 
     const [formData, setFormData] = useState({
         crfType: 'CS' as 'CS' | 'LS',
@@ -36,6 +40,7 @@ export const CRFPage: React.FC = () => {
         date: new Date().toISOString().split('T')[0],
         priority: 'Normal',
         quotationRef: '',
+        sampleImages: [] as string[], // Array of base64 images
     });
 
     const handleQuotationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -87,6 +92,84 @@ export const CRFPage: React.FC = () => {
         }));
     };
 
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        const newImages: string[] = [];
+        const fileReaders: Promise<string>[] = [];
+
+        Array.from(files).forEach(file => {
+            const promise = new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+            fileReaders.push(promise);
+        });
+
+        Promise.all(fileReaders).then(results => {
+            setFormData(prev => ({
+                ...prev,
+                sampleImages: [...prev.sampleImages, ...results]
+            }));
+        }).catch(error => {
+            console.error('Error reading files:', error);
+            alert('Error uploading images');
+        });
+    };
+
+    const handleRemoveImage = (index: number) => {
+        setFormData(prev => ({
+            ...prev,
+            sampleImages: prev.sampleImages.filter((_, i) => i !== index)
+        }));
+    };
+
+    const startCamera = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment' } // Use back camera on mobile
+            });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                streamRef.current = stream;
+                setShowCamera(true);
+            }
+        } catch (error) {
+            console.error('Error accessing camera:', error);
+            alert('Unable to access camera. Please check permissions.');
+        }
+    };
+
+    const stopCamera = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+        setShowCamera(false);
+    };
+
+    const capturePhoto = () => {
+        if (videoRef.current && canvasRef.current) {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(video, 0, 0);
+                const imageData = canvas.toDataURL('image/jpeg');
+                setFormData(prev => ({
+                    ...prev,
+                    sampleImages: [...prev.sampleImages, imageData]
+                }));
+                stopCamera();
+            }
+        }
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         
@@ -124,6 +207,7 @@ export const CRFPage: React.FC = () => {
             date: new Date().toISOString().split('T')[0],
             priority: 'Normal',
             quotationRef: '',
+            sampleImages: [],
         });
         setShowForm(false);
         setEditingCRF(null);
@@ -146,6 +230,7 @@ export const CRFPage: React.FC = () => {
             date: crf.date,
             priority: crf.priority,
             quotationRef: crf.quotationRef || '',
+            sampleImages: crf.sampleImages || [],
         });
         setEditingCRF(crf.id);
         setShowForm(true);
@@ -541,19 +626,25 @@ export const CRFPage: React.FC = () => {
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Test Parameters <span className="text-red-500">*</span>
                                 </label>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                    {mockParameters.map(param => (
-                                        <label key={param.name} className="flex items-center gap-2 p-2 border border-gray-200 rounded hover:bg-gray-50 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={formData.testParameters.includes(param.name)}
-                                                onChange={() => handleParameterToggle(param.name)}
-                                                className="w-4 h-4 text-primary-600"
-                                            />
-                                            <span className="text-sm text-gray-700">{param.name}</span>
-                                        </label>
-                                    ))}
-                                </div>
+                                {formData.sampleType ? (
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                        {mockParameters
+                                            .filter(param => param.sampleTypes.includes(formData.sampleType))
+                                            .map(param => (
+                                                <label key={param.name} className="flex items-center gap-2 p-2 border border-gray-200 rounded hover:bg-gray-50 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={formData.testParameters.includes(param.name)}
+                                                        onChange={() => handleParameterToggle(param.name)}
+                                                        className="w-4 h-4 text-primary-600"
+                                                    />
+                                                    <span className="text-sm text-gray-700">{param.name}</span>
+                                                </label>
+                                            ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-gray-500 italic">Please select a sample type first</p>
+                                )}
                             </div>
 
                             <div className="mb-4">
@@ -575,6 +666,81 @@ export const CRFPage: React.FC = () => {
                                         </label>
                                     ))}
                                 </div>
+                            </div>
+
+                            {/* Sample Images Upload (Optional) */}
+                            <div className="mb-4 md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Sample Images (Optional)
+                                </label>
+                                <div className="flex gap-3 mb-3">
+                                    <label className="flex-1 cursor-pointer">
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            multiple
+                                            onChange={handleImageUpload}
+                                            className="hidden"
+                                            id="file-upload"
+                                        />
+                                        <div className="flex items-center justify-center gap-2 px-4 py-2 bg-primary-50 text-primary-700 rounded-lg border-2 border-primary-200 hover:bg-primary-100 transition-colors">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                            </svg>
+                                            <span className="text-sm font-semibold">Upload from Gallery</span>
+                                        </div>
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={startCamera}
+                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg border-2 border-green-200 hover:bg-green-100 transition-colors"
+                                    >
+                                        <Camera className="w-5 h-5" />
+                                        <span className="text-sm font-semibold">Take Photo</span>
+                                    </button>
+                                </div>
+
+                                {/* Camera Modal */}
+                                {showCamera && (
+                                    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+                                        <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+                                            <h3 className="text-lg font-semibold mb-4">Capture Sample Image</h3>
+                                            <video 
+                                                ref={videoRef} 
+                                                autoPlay 
+                                                playsInline
+                                                className="w-full rounded-lg mb-4 bg-black"
+                                            />
+                                            <canvas ref={canvasRef} className="hidden" />
+                                            <div className="flex gap-3">
+                                                <Button type="button" onClick={capturePhoto} className="flex-1">
+                                                    <Camera className="w-4 h-4 mr-2" />
+                                                    Capture
+                                                </Button>
+                                                <Button type="button" variant="secondary" onClick={stopCamera} className="flex-1">
+                                                    Cancel
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {formData.sampleImages.length > 0 && (
+                                    <div className="mt-3 grid grid-cols-4 gap-3">
+                                        {formData.sampleImages.map((img, idx) => (
+                                            <div key={idx} className="relative">
+                                                <img src={img} alt={`Sample ${idx + 1}`} className="w-full h-24 object-cover rounded border" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveImage(idx)}
+                                                    className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-700"
+                                                >
+                                                    ×
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <Select

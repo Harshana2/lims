@@ -10,6 +10,8 @@ import {
     CheckCircle,
     FileBarChart,
     MapPin,
+    Calendar,
+    Settings,
 } from 'lucide-react';
 
 const menuItems = [
@@ -22,6 +24,8 @@ const menuItems = [
     { path: '/environmental-sampling', icon: MapPin, label: 'Environmental Sampling' },
     { path: '/review-sign', icon: CheckCircle, label: 'Review & Sign' },
     { path: '/report-generation', icon: FileBarChart, label: 'Report Generation' },
+    { path: '/sample-collection', icon: Calendar, label: 'Sample Collection' },
+    { path: '/configuration', icon: Settings, label: 'Configuration' },
 ];
 
 export const Sidebar: React.FC = () => {

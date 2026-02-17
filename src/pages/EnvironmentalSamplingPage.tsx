@@ -7,7 +7,9 @@ import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { useWorkflow } from '../context/WorkflowContext';
-import { MapPin, Camera, Trash2, Plus, Navigation } from 'lucide-react';
+import { MapPin, Camera, Trash2, Plus, Navigation, FileText, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 // Fix for default marker icons in Leaflet with React
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -81,7 +83,22 @@ export const EnvironmentalSamplingPage: React.FC = () => {
     const [mapCenter, setMapCenter] = useState<[number, number]>([6.9271, 79.8612]); // Colombo, Sri Lanka
     const [showMeasurementForm, setShowMeasurementForm] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
+    const [showReport, setShowReport] = useState(false);
+    const [reportData, setReportData] = useState({
+        title: 'Environmental Sampling Report',
+        projectName: '',
+        date: new Date().toISOString().split('T')[0],
+        preparedBy: '',
+        reviewedBy: '',
+        introduction: 'This report presents the findings from environmental sampling conducted at the specified locations.',
+        methodology: 'Field measurements were taken using calibrated instruments at GPS-marked locations. All samples were collected following standard protocols.',
+        findings: '',
+        conclusion: '',
+        recommendations: ''
+    });
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const reportRef = useRef<HTMLDivElement>(null);
 
     // Measurement form state
     const [measurementForm, setMeasurementForm] = useState({
@@ -258,6 +275,62 @@ export const EnvironmentalSamplingPage: React.FC = () => {
         alert('Environmental sampling data submitted successfully! CRF moved to Review status.');
     };
 
+    const handleGenerateReport = async () => {
+        if (!reportRef.current) return;
+
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const margin = 15;
+
+        // Capture the report content as canvas
+        const canvas = await html2canvas(reportRef.current, {
+            scale: 2,
+            logging: false,
+            useCORS: true
+        });
+
+        const imgWidth = pageWidth - 2 * margin;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        let heightLeft = imgHeight;
+        let position = margin;
+
+        // Add first page
+        const imgData = canvas.toDataURL('image/png');
+        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
+        heightLeft -= (pageHeight - 2 * margin);
+
+        // Add additional pages if content is longer
+        while (heightLeft > 0) {
+            position = heightLeft - imgHeight + margin;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
+            heightLeft -= (pageHeight - 2 * margin);
+        }
+
+        pdf.save(`Environmental_Sampling_Report_${selectedCRFId}_${Date.now()}.pdf`);
+    };
+
+    const handleExportMapImage = async () => {
+        const mapElement = document.querySelector('.leaflet-container') as HTMLElement;
+        if (!mapElement) return;
+
+        try {
+            const canvas = await html2canvas(mapElement, {
+                useCORS: true,
+                logging: false
+            });
+            
+            const link = document.createElement('a');
+            link.download = `site_map_${selectedCRFId}_${Date.now()}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+        } catch (error) {
+            console.error('Error exporting map:', error);
+            alert('Error exporting map image');
+        }
+    };
+
     const selectedPoint = samplingPoints.find(p => p.id === selectedPointId);
 
     const parameterOptions = [
@@ -357,23 +430,64 @@ export const EnvironmentalSamplingPage: React.FC = () => {
                                     <Navigation size={16} className="mr-2" />
                                     Center Map on My Location
                                 </Button>
+                                <Button
+                                    variant="secondary"
+                                    onClick={handleExportMapImage}
+                                >
+                                    <Download size={16} className="mr-2" />
+                                    Export Map
+                                </Button>
                             </div>
                         </div>
-                        
-                        <p className="text-sm text-gray-600 mb-4">
-                            <MapPin size={16} className="inline mr-1" />
-                            Click on the map to add sampling points
-                        </p>
+
+                        {/* Map Type Toggle */}
+                        <div className="mb-4 flex items-center gap-4">
+                            <p className="text-sm text-gray-600">
+                                <MapPin size={16} className="inline mr-1" />
+                                Click on the map to add sampling points
+                            </p>
+                            <div className="ml-auto flex gap-2">
+                                <button
+                                    onClick={() => setMapType('standard')}
+                                    className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+                                        mapType === 'standard'
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    }`}
+                                >
+                                    Standard Map
+                                </button>
+                                <button
+                                    onClick={() => setMapType('satellite')}
+                                    className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+                                        mapType === 'satellite'
+                                            ? 'bg-primary-600 text-white'
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    }`}
+                                >
+                                    Satellite View
+                                </button>
+                            </div>
+                        </div>
 
                         <div className="rounded-lg overflow-hidden border-2 border-gray-200">
                             <MapContainer
                                 center={mapCenter}
-                                zoom={15}
+                                zoom={mapType === 'satellite' ? 18 : 15}
                                 style={{ height: '500px', width: '100%' }}
                             >
                                 <TileLayer
-                                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                    url={
+                                        mapType === 'satellite'
+                                            ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                                            : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                                    }
+                                    attribution={
+                                        mapType === 'satellite'
+                                            ? '&copy; <a href="https://www.esri.com/">Esri</a>'
+                                            : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                    }
+                                    maxZoom={mapType === 'satellite' ? 19 : 18}
                                 />
                                 <LocationMarker onAddPoint={handleAddPoint} />
                                 {samplingPoints.map((point) => (
@@ -588,7 +702,7 @@ export const EnvironmentalSamplingPage: React.FC = () => {
                                 ))}
                             </div>
 
-                            <div className="mt-6 flex justify-end">
+                            <div className="mt-6 flex justify-end gap-3">
                                 {!isSubmitted ? (
                                     <Button
                                         onClick={handleSubmit}
@@ -597,8 +711,231 @@ export const EnvironmentalSamplingPage: React.FC = () => {
                                         Submit Environmental Sampling Data
                                     </Button>
                                 ) : (
-                                    <Badge status="approved">Data Submitted - Moved to Review</Badge>
+                                    <>
+                                        <Badge status="approved">Data Submitted - Moved to Review</Badge>
+                                        <Button
+                                            variant="primary"
+                                            onClick={() => setShowReport(!showReport)}
+                                        >
+                                            <FileText size={16} className="mr-2" />
+                                            {showReport ? 'Hide Report' : 'Generate Report'}
+                                        </Button>
+                                    </>
                                 )}
+                            </div>
+                        </Card>
+                    )}
+
+                    {/* Editable Report Section */}
+                    {isSubmitted && showReport && (
+                        <Card className="mb-6">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-lg font-semibold text-gray-800">Environmental Sampling Report (Editable)</h3>
+                                <Button onClick={handleGenerateReport}>
+                                    <Download size={16} className="mr-2" />
+                                    Download PDF
+                                </Button>
+                            </div>
+
+                            <div ref={reportRef} className="bg-white p-8 border rounded-lg">
+                                {/* Report Header */}
+                                <div className="text-center mb-8 border-b pb-6">
+                                    <input
+                                        type="text"
+                                        value={reportData.title}
+                                        onChange={(e) => setReportData({ ...reportData, title: e.target.value })}
+                                        className="text-3xl font-bold text-center w-full mb-4 border-0 border-b-2 border-transparent hover:border-gray-300 focus:border-primary-500 outline-none"
+                                    />
+                                    <div className="grid grid-cols-2 gap-4 text-sm mt-4">
+                                        <div className="text-left">
+                                            <label className="text-gray-600 font-medium">Project Name:</label>
+                                            <input
+                                                type="text"
+                                                value={reportData.projectName}
+                                                onChange={(e) => setReportData({ ...reportData, projectName: e.target.value })}
+                                                placeholder="Enter project name"
+                                                className="w-full mt-1 px-2 py-1 border rounded"
+                                            />
+                                        </div>
+                                        <div className="text-right">
+                                            <label className="text-gray-600 font-medium">Date:</label>
+                                            <input
+                                                type="date"
+                                                value={reportData.date}
+                                                onChange={(e) => setReportData({ ...reportData, date: e.target.value })}
+                                                className="w-full mt-1 px-2 py-1 border rounded"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Customer Info */}
+                                {selectedCRF && (
+                                    <div className="mb-6 p-4 bg-gray-50 rounded">
+                                        <h4 className="font-bold text-lg mb-3">Customer Information</h4>
+                                        <div className="grid grid-cols-2 gap-3 text-sm">
+                                            <div><span className="font-medium">Name:</span> {selectedCRF.customer}</div>
+                                            <div><span className="font-medium">CRF ID:</span> {selectedCRF.id}</div>
+                                            <div><span className="font-medium">Address:</span> {selectedCRF.address}</div>
+                                            <div><span className="font-medium">Sample Type:</span> {selectedCRF.sampleType}</div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Introduction */}
+                                <div className="mb-6">
+                                    <h4 className="font-bold text-lg mb-2">1. Introduction</h4>
+                                    <textarea
+                                        value={reportData.introduction}
+                                        onChange={(e) => setReportData({ ...reportData, introduction: e.target.value })}
+                                        className="w-full p-3 border rounded min-h-[100px] text-sm"
+                                        placeholder="Enter introduction..."
+                                    />
+                                </div>
+
+                                {/* Methodology */}
+                                <div className="mb-6">
+                                    <h4 className="font-bold text-lg mb-2">2. Methodology</h4>
+                                    <textarea
+                                        value={reportData.methodology}
+                                        onChange={(e) => setReportData({ ...reportData, methodology: e.target.value })}
+                                        className="w-full p-3 border rounded min-h-[100px] text-sm"
+                                        placeholder="Enter methodology..."
+                                    />
+                                </div>
+
+                                {/* Site Map */}
+                                <div className="mb-6">
+                                    <h4 className="font-bold text-lg mb-3">3. Site Map with Sampling Locations</h4>
+                                    <div className="rounded-lg overflow-hidden border">
+                                        <MapContainer
+                                            center={mapCenter}
+                                            zoom={mapType === 'satellite' ? 19 : 16}
+                                            style={{ height: '400px', width: '100%' }}
+                                            scrollWheelZoom={false}
+                                        >
+                                            <TileLayer
+                                                url={
+                                                    mapType === 'satellite'
+                                                        ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                                                        : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                                                }
+                                                attribution={
+                                                    mapType === 'satellite'
+                                                        ? '&copy; <a href="https://www.esri.com/">Esri</a>'
+                                                        : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                                }
+                                                maxZoom={mapType === 'satellite' ? 19 : 18}
+                                            />
+                                            {samplingPoints.map((point) => (
+                                                <Marker
+                                                    key={point.id}
+                                                    position={[point.latitude, point.longitude]}
+                                                    icon={createNumberedIcon(point.pointNumber)}
+                                                >
+                                                    <Popup>
+                                                        <div className="p-2">
+                                                            <p className="font-bold">{point.locationName}</p>
+                                                            <p className="text-xs">{point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}</p>
+                                                        </div>
+                                                    </Popup>
+                                                </Marker>
+                                            ))}
+                                        </MapContainer>
+                                    </div>
+                                </div>
+
+                                {/* Sampling Data */}
+                                <div className="mb-6">
+                                    <h4 className="font-bold text-lg mb-3">4. Sampling Data and Measurements</h4>
+                                    {samplingPoints.map((point) => (
+                                        <div key={point.id} className="mb-4 border rounded p-4">
+                                            <h5 className="font-bold mb-2">Point {point.pointNumber}: {point.locationName}</h5>
+                                            <p className="text-xs text-gray-600 mb-2">
+                                                GPS: {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
+                                            </p>
+                                            <table className="w-full text-sm border">
+                                                <thead className="bg-gray-100">
+                                                    <tr>
+                                                        <th className="border p-2 text-left">Parameter</th>
+                                                        <th className="border p-2 text-left">Value</th>
+                                                        <th className="border p-2 text-left">Unit</th>
+                                                        <th className="border p-2 text-left">Measured By</th>
+                                                        <th className="border p-2 text-left">Remarks</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {point.measurements.map((m, idx) => (
+                                                        <tr key={idx}>
+                                                            <td className="border p-2">{m.parameter}</td>
+                                                            <td className="border p-2">{m.value}</td>
+                                                            <td className="border p-2">{m.unit}</td>
+                                                            <td className="border p-2">{m.measuredBy}</td>
+                                                            <td className="border p-2">{m.remarks || '-'}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Findings */}
+                                <div className="mb-6">
+                                    <h4 className="font-bold text-lg mb-2">5. Findings and Analysis</h4>
+                                    <textarea
+                                        value={reportData.findings}
+                                        onChange={(e) => setReportData({ ...reportData, findings: e.target.value })}
+                                        className="w-full p-3 border rounded min-h-[150px] text-sm"
+                                        placeholder="Enter findings and analysis..."
+                                    />
+                                </div>
+
+                                {/* Conclusion */}
+                                <div className="mb-6">
+                                    <h4 className="font-bold text-lg mb-2">6. Conclusion</h4>
+                                    <textarea
+                                        value={reportData.conclusion}
+                                        onChange={(e) => setReportData({ ...reportData, conclusion: e.target.value })}
+                                        className="w-full p-3 border rounded min-h-[100px] text-sm"
+                                        placeholder="Enter conclusion..."
+                                    />
+                                </div>
+
+                                {/* Recommendations */}
+                                <div className="mb-6">
+                                    <h4 className="font-bold text-lg mb-2">7. Recommendations</h4>
+                                    <textarea
+                                        value={reportData.recommendations}
+                                        onChange={(e) => setReportData({ ...reportData, recommendations: e.target.value })}
+                                        className="w-full p-3 border rounded min-h-[100px] text-sm"
+                                        placeholder="Enter recommendations..."
+                                    />
+                                </div>
+
+                                {/* Signatures */}
+                                <div className="mt-8 pt-6 border-t grid grid-cols-2 gap-8">
+                                    <div>
+                                        <label className="text-sm font-medium text-gray-600">Prepared By:</label>
+                                        <input
+                                            type="text"
+                                            value={reportData.preparedBy}
+                                            onChange={(e) => setReportData({ ...reportData, preparedBy: e.target.value })}
+                                            placeholder="Name and signature"
+                                            className="w-full mt-2 px-2 py-1 border-b-2 border-gray-300"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-medium text-gray-600">Reviewed By:</label>
+                                        <input
+                                            type="text"
+                                            value={reportData.reviewedBy}
+                                            onChange={(e) => setReportData({ ...reportData, reviewedBy: e.target.value })}
+                                            placeholder="Name and signature"
+                                            className="w-full mt-2 px-2 py-1 border-b-2 border-gray-300"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </Card>
                     )}

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card } from '../components/ui/Card';
 import { WorkflowTimeline } from '../components/WorkflowTimeline';
+import { SampleCollectionCalendar } from '../components/SampleCollectionCalendar';
 import { useWorkflow } from '../context/WorkflowContext';
 import { FileText, FlaskConical, CheckCircle, AlertCircle } from 'lucide-react';
 
@@ -63,6 +64,11 @@ export const Dashboard: React.FC = () => {
             {/* Workflow Timeline */}
             <WorkflowTimeline />
 
+            {/* Sample Collection Calendar */}
+            <div className="mt-8">
+                <SampleCollectionCalendar />
+            </div>
+
             {/* Quick Info */}
             <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
@@ -102,12 +108,12 @@ export const Dashboard: React.FC = () => {
                             <span className="font-medium">{confirmedRequests.length}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                            <span>CRF Status:</span>
-                            <span className="font-medium">{workflow.crfStatus}</span>
+                            <span>CRFs Created:</span>
+                            <span className="font-medium">{workflow.crfs.length}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                            <span>Results Status:</span>
-                            <span className="font-medium">{workflow.resultsStatus}</span>
+                            <span>Quotations:</span>
+                            <span className="font-medium">{workflow.quotations.length}</span>
                         </div>
                     </div>
                 </Card>

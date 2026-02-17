@@ -19,11 +19,29 @@ export interface Parameter {
     unit: string;
     method: string;
     defaultPrice: number;
+    sampleTypes: string[]; // Which sample types this parameter applies to
 }
 
 export interface Chemist {
     id: string;
     name: string;
+}
+
+export interface SampleTypeConfig {
+    name: string;
+    parameters: string[]; // Parameter names that apply to this sample type
+}
+
+export interface ScheduledCollection {
+    id: string;
+    customerId: string;
+    customerName: string;
+    sampleType: string;
+    collectionDate: string; // ISO date string
+    address: string;
+    contact: string;
+    notes: string;
+    status: 'scheduled' | 'collected' | 'cancelled';
 }
 
 export const mockCustomers: Customer[] = [
@@ -33,6 +51,20 @@ export const mockCustomers: Customer[] = [
         address: 'Padukka',
         contact: 'Mr. John Silva',
         email: 'john@edinburgh.lk',
+    },
+    {
+        id: '2',
+        name: 'Green Valley Industries',
+        address: 'Katunayake',
+        contact: 'Ms. Sarah Fernando',
+        email: 'sarah@greenvalley.lk',
+    },
+    {
+        id: '3',
+        name: 'Ocean Foods Ltd',
+        address: 'Negombo',
+        contact: 'Mr. Rajesh Kumar',
+        email: 'rajesh@oceanfoods.lk',
     },
 ];
 
@@ -45,18 +77,111 @@ export const mockSamples: Sample[] = [
 ];
 
 export const mockParameters: Parameter[] = [
-    { name: 'COD', unit: 'mg/L', method: 'APHA 5220 D', defaultPrice: 2500 },
-    { name: 'BOD', unit: 'mg/L', method: 'APHA 5210 B', defaultPrice: 3000 },
-    { name: 'pH', unit: 'pH units', method: 'APHA 4500-H+ B', defaultPrice: 500 },
-    { name: 'Total Suspended Solids', unit: 'mg/L', method: 'APHA 2540 D', defaultPrice: 1500 },
-    { name: 'Oil & Grease', unit: 'mg/L', method: 'APHA 5520 B', defaultPrice: 3500 },
+    // Wastewater parameters
+    { name: 'COD', unit: 'mg/L', method: 'APHA 5220 D', defaultPrice: 2500, sampleTypes: ['Wastewater', 'Industrial Effluent'] },
+    { name: 'BOD', unit: 'mg/L', method: 'APHA 5210 B', defaultPrice: 3000, sampleTypes: ['Wastewater', 'Industrial Effluent'] },
+    { name: 'pH', unit: 'pH units', method: 'APHA 4500-H+ B', defaultPrice: 500, sampleTypes: ['Wastewater', 'Drinking Water', 'Industrial Effluent', 'Soil'] },
+    { name: 'Total Suspended Solids', unit: 'mg/L', method: 'APHA 2540 D', defaultPrice: 1500, sampleTypes: ['Wastewater', 'Industrial Effluent', 'Drinking Water'] },
+    { name: 'Oil & Grease', unit: 'mg/L', method: 'APHA 5520 B', defaultPrice: 3500, sampleTypes: ['Wastewater', 'Industrial Effluent'] },
+    { name: 'Total Nitrogen', unit: 'mg/L', method: 'APHA 4500-N', defaultPrice: 2800, sampleTypes: ['Wastewater', 'Industrial Effluent'] },
+    { name: 'Total Phosphorus', unit: 'mg/L', method: 'APHA 4500-P', defaultPrice: 2600, sampleTypes: ['Wastewater', 'Industrial Effluent'] },
+    
+    // Drinking Water parameters
+    { name: 'Total Coliform', unit: 'CFU/100mL', method: 'APHA 9221 B', defaultPrice: 2000, sampleTypes: ['Drinking Water'] },
+    { name: 'E. coli', unit: 'CFU/100mL', method: 'APHA 9221 F', defaultPrice: 2500, sampleTypes: ['Drinking Water', 'Food'] },
+    { name: 'Turbidity', unit: 'NTU', method: 'APHA 2130 B', defaultPrice: 800, sampleTypes: ['Drinking Water', 'Wastewater'] },
+    { name: 'Chlorine (Free)', unit: 'mg/L', method: 'APHA 4500-Cl B', defaultPrice: 600, sampleTypes: ['Drinking Water'] },
+    { name: 'Total Hardness', unit: 'mg/L as CaCO3', method: 'APHA 2340 C', defaultPrice: 1200, sampleTypes: ['Drinking Water'] },
+    { name: 'Iron', unit: 'mg/L', method: 'APHA 3500-Fe B', defaultPrice: 1500, sampleTypes: ['Drinking Water', 'Wastewater'] },
+    
+    // Noise parameters (Environmental)
+    { name: 'Noise Level', unit: 'dB(A)', method: 'ISO 1996-2', defaultPrice: 3000, sampleTypes: ['Noise'] },
+    { name: 'Peak Noise', unit: 'dB(A)', method: 'ISO 1996-2', defaultPrice: 3500, sampleTypes: ['Noise'] },
+    { name: 'Background Noise', unit: 'dB(A)', method: 'ISO 1996-2', defaultPrice: 2800, sampleTypes: ['Noise'] },
+    
+    // Soil parameters
+    { name: 'Moisture Content', unit: '%', method: 'ASTM D2216', defaultPrice: 1800, sampleTypes: ['Soil'] },
+    { name: 'Organic Matter', unit: '%', method: 'ASTM D2974', defaultPrice: 2200, sampleTypes: ['Soil'] },
+    { name: 'Heavy Metals (Lead)', unit: 'mg/kg', method: 'EPA 3050B', defaultPrice: 4000, sampleTypes: ['Soil'] },
+    { name: 'Heavy Metals (Cadmium)', unit: 'mg/kg', method: 'EPA 3050B', defaultPrice: 4000, sampleTypes: ['Soil'] },
+    
+    // Food parameters
+    { name: 'Total Plate Count', unit: 'CFU/g', method: 'ISO 4833', defaultPrice: 2500, sampleTypes: ['Food'] },
+    { name: 'Salmonella', unit: 'Presence/25g', method: 'ISO 6579', defaultPrice: 3500, sampleTypes: ['Food'] },
+    { name: 'Moisture Content (Food)', unit: '%', method: 'AOAC 925.10', defaultPrice: 1500, sampleTypes: ['Food'] },
+    { name: 'Fat Content', unit: '%', method: 'AOAC 922.06', defaultPrice: 2000, sampleTypes: ['Food'] },
+];
+
+export const sampleTypeConfigs: SampleTypeConfig[] = [
+    {
+        name: 'Wastewater',
+        parameters: ['COD', 'BOD', 'pH', 'Total Suspended Solids', 'Oil & Grease', 'Total Nitrogen', 'Total Phosphorus', 'Turbidity', 'Iron']
+    },
+    {
+        name: 'Drinking Water',
+        parameters: ['Total Coliform', 'E. coli', 'pH', 'Turbidity', 'Chlorine (Free)', 'Total Hardness', 'Iron', 'Total Suspended Solids']
+    },
+    {
+        name: 'Industrial Effluent',
+        parameters: ['COD', 'BOD', 'pH', 'Total Suspended Solids', 'Oil & Grease', 'Total Nitrogen', 'Total Phosphorus']
+    },
+    {
+        name: 'Noise',
+        parameters: ['Noise Level', 'Peak Noise', 'Background Noise']
+    },
+    {
+        name: 'Soil',
+        parameters: ['pH', 'Moisture Content', 'Organic Matter', 'Heavy Metals (Lead)', 'Heavy Metals (Cadmium)']
+    },
+    {
+        name: 'Food',
+        parameters: ['Total Plate Count', 'E. coli', 'Salmonella', 'Moisture Content (Food)', 'Fat Content']
+    }
+];
+
+export const mockScheduledCollections: ScheduledCollection[] = [
+    {
+        id: 'SC-001',
+        customerId: '1',
+        customerName: 'Edinburgh Products (Pvt) Ltd',
+        sampleType: 'Wastewater',
+        collectionDate: '2026-02-21T10:00:00',
+        address: 'Padukka',
+        contact: 'Mr. John Silva',
+        notes: 'Collect from main drainage outlet',
+        status: 'scheduled'
+    },
+    {
+        id: 'SC-002',
+        customerId: '2',
+        customerName: 'Green Valley Industries',
+        sampleType: 'Noise',
+        collectionDate: '2026-02-23T14:00:00',
+        address: 'Katunayake',
+        contact: 'Ms. Sarah Fernando',
+        notes: 'Measure noise levels near production area',
+        status: 'scheduled'
+    },
+    {
+        id: 'SC-003',
+        customerId: '3',
+        customerName: 'Ocean Foods Ltd',
+        sampleType: 'Food',
+        collectionDate: '2026-02-25T09:00:00',
+        address: 'Negombo',
+        contact: 'Mr. Rajesh Kumar',
+        notes: 'Collect fish samples from cold storage',
+        status: 'scheduled'
+    },
 ];
 
 export const mockChemists: Chemist[] = [
     { id: '1', name: 'D.H.S. Costa' },
     { id: '2', name: 'S.A.A.G. Senarathna' },
+    { id: '3', name: 'K.M. Perera' },
+    { id: '4', name: 'A.B. Jayawardena' },
 ];
 
-export const sampleTypes = ['Wastewater', 'Drinking Water', 'Industrial Effluent', 'Soil', 'Food'];
-export const priorities = ['Normal', 'Urgent'];
-export const samplingTypes = ['Customer Submission', 'Lab Service'];
+export const sampleTypes = ['Wastewater', 'Drinking Water', 'Industrial Effluent', 'Soil', 'Food', 'Noise'];
+export const priorities = ['Normal', 'Urgent', 'Rush'];
+export const samplingTypes = ['One Time', 'Monthly', 'Quarterly', 'Annually'];

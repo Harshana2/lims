@@ -43,6 +43,7 @@ export interface SampleData {
     submissionDetail: string;
     testValue?: string;
     remarks?: string;
+    image?: string; // Base64 encoded image (optional)
 }
 
 export interface CRFData {
@@ -65,6 +66,7 @@ export interface CRFData {
     quotationRef?: string; // Optional - for samples with quotation
     status: 'draft' | 'submitted' | 'assigned' | 'testing' | 'review' | 'approved' | 'completed';
     createdAt: string;
+    sampleImages?: string[]; // Optional array of base64 images for samples
 }
 
 export interface ParameterAssignment {

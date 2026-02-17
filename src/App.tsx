@@ -7,11 +7,13 @@ import { Dashboard } from './pages/Dashboard';
 import { RequestPage } from './pages/RequestPage';
 import { QuotationPage } from './pages/QuotationPage';
 import { CRFPage } from './pages/CRFPage';
+import { SampleCollectionPage } from './pages/SampleCollectionPage';
 import { ParameterAssignmentPage } from './pages/ParameterAssignmentPage';
 import { DataEntryPage } from './pages/DataEntryPage';
 import { EnvironmentalSamplingPage } from './pages/EnvironmentalSamplingPage';
 import { ReviewSignPage } from './pages/ReviewSignPage';
 import { ReportGenerationPage } from './pages/ReportGenerationPage';
+import { ConfigurationPage } from './pages/ConfigurationPage';
 
 function App() {
   return (
@@ -24,11 +26,13 @@ function App() {
             <Route path="/requests" element={<RequestPage />} />
             <Route path="/quotations" element={<QuotationPage />} />
             <Route path="/crf" element={<CRFPage />} />
+            <Route path="/sample-collection" element={<SampleCollectionPage />} />
             <Route path="/parameter-assignment" element={<ParameterAssignmentPage />} />
             <Route path="/data-entry" element={<DataEntryPage />} />
             <Route path="/environmental-sampling" element={<EnvironmentalSamplingPage />} />
             <Route path="/review-sign" element={<ReviewSignPage />} />
             <Route path="/report-generation" element={<ReportGenerationPage />} />
+            <Route path="/configuration" element={<ConfigurationPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -383,9 +383,16 @@ export const QuotationPage: React.FC = () => {
                                                                 className="w-full px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
                                                             >
                                                                 <option value="">Select Parameter</option>
-                                                                {mockParameters.map(p => (
-                                                                    <option key={p.name} value={p.name}>{p.name}</option>
-                                                                ))}
+                                                                {customQuotation.sampleType 
+                                                                    ? mockParameters
+                                                                        .filter(p => p.sampleTypes.includes(customQuotation.sampleType))
+                                                                        .map(p => (
+                                                                            <option key={p.name} value={p.name}>{p.name}</option>
+                                                                        ))
+                                                                    : mockParameters.map(p => (
+                                                                        <option key={p.name} value={p.name}>{p.name}</option>
+                                                                    ))
+                                                                }
                                                             </select>
                                                         ) : (
                                                             <span className="font-medium">{param.name}</span>
