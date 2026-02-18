@@ -13,6 +13,7 @@ import { DataEntryPage } from './pages/DataEntryPage';
 import { EnvironmentalSamplingPage } from './pages/EnvironmentalSamplingPage';
 import { ReviewSignPage } from './pages/ReviewSignPage';
 import { ReportGenerationPage } from './pages/ReportGenerationPage';
+import { AuditLogPage } from './pages/AuditLogPage';
 import { ConfigurationPage } from './pages/ConfigurationPage';
 
 function App() {
@@ -32,6 +33,7 @@ function App() {
             <Route path="/environmental-sampling" element={<EnvironmentalSamplingPage />} />
             <Route path="/review-sign" element={<ReviewSignPage />} />
             <Route path="/report-generation" element={<ReportGenerationPage />} />
+            <Route path="/audit-log" element={<AuditLogPage />} />
             <Route path="/configuration" element={<ConfigurationPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

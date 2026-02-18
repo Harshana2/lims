@@ -46,6 +46,34 @@ export interface SampleData {
     image?: string; // Base64 encoded image (optional)
 }
 
+export interface FieldMeasurement {
+    parameter: string;
+    value: string;
+    unit: string;
+    measuredBy: string;
+    measuredAt: string;
+    remarks?: string;
+}
+
+export interface GPSSamplingPoint {
+    id: string;
+    pointNumber: number;
+    latitude: number;
+    longitude: number;
+    locationName: string;
+    measurements: FieldMeasurement[];
+    timestamp: string;
+    photo?: string;
+}
+
+export interface EnvironmentalSamplingData {
+    crfId: string;
+    samplingPoints: GPSSamplingPoint[];
+    mapType: 'standard' | 'satellite';
+    submittedAt: string;
+    submittedBy: string;
+}
+
 export interface CRFData {
     id: string;
     crfType: 'CS' | 'LS'; // Customer Sample or Lab Sample
@@ -67,6 +95,7 @@ export interface CRFData {
     status: 'draft' | 'submitted' | 'assigned' | 'testing' | 'review' | 'approved' | 'completed';
     createdAt: string;
     sampleImages?: string[]; // Optional array of base64 images for samples
+    environmentalData?: EnvironmentalSamplingData; // Optional environmental sampling data
 }
 
 export interface ParameterAssignment {

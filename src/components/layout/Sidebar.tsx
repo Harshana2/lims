@@ -12,6 +12,7 @@ import {
     MapPin,
     Calendar,
     Settings,
+    FileSearch,
 } from 'lucide-react';
 
 const menuItems = [
@@ -25,6 +26,7 @@ const menuItems = [
     { path: '/review-sign', icon: CheckCircle, label: 'Review & Sign' },
     { path: '/report-generation', icon: FileBarChart, label: 'Report Generation' },
     { path: '/sample-collection', icon: Calendar, label: 'Sample Collection' },
+    { path: '/audit-log', icon: FileSearch, label: 'Audit Log' },
     { path: '/configuration', icon: Settings, label: 'Configuration' },
 ];
 

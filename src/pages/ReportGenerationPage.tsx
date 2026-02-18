@@ -176,6 +176,69 @@ export const ReportGenerationPage: React.FC = () => {
                                 </div>
                             </Card>
 
+                            {/* Environmental Sampling Data Preview */}
+                            {selectedCRF.environmentalData && (
+                                <Card className="mb-6">
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-3 border-b">Environmental Sampling Data</h3>
+                                    <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <p className="text-sm">
+                                                <span className="font-semibold">Sampling Points:</span> {selectedCRF.environmentalData.samplingPoints.length}
+                                            </p>
+                                            <p className="text-sm">
+                                                <span className="font-semibold">Map Type:</span> {selectedCRF.environmentalData.mapType === 'satellite' ? 'Satellite View' : 'Standard Map'}
+                                            </p>
+                                            <p className="text-sm">
+                                                <span className="font-semibold">Submitted By:</span> {selectedCRF.environmentalData.submittedBy}
+                                            </p>
+                                            <p className="text-sm">
+                                                <span className="font-semibold">Submitted At:</span> {new Date(selectedCRF.environmentalData.submittedAt).toLocaleString()}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {selectedCRF.environmentalData.samplingPoints.map((point) => (
+                                        <div key={point.id} className="mb-4">
+                                            <div className="bg-gray-50 p-3 rounded-t-lg">
+                                                <h4 className="font-semibold text-primary-700">
+                                                    Point {point.pointNumber}: {point.locationName}
+                                                </h4>
+                                                <p className="text-sm text-gray-600 mt-1">
+                                                    GPS: {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
+                                                </p>
+                                            </div>
+                                            
+                                            {point.measurements.length > 0 && (
+                                                <div className="overflow-x-auto">
+                                                    <Table>
+                                                        <TableHeader>
+                                                            <TableRow>
+                                                                <TableHead>Parameter</TableHead>
+                                                                <TableHead>Value</TableHead>
+                                                                <TableHead>Unit</TableHead>
+                                                                <TableHead>Measured By</TableHead>
+                                                                <TableHead>Remarks</TableHead>
+                                                            </TableRow>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {point.measurements.map((measurement, index) => (
+                                                                <TableRow key={index}>
+                                                                    <TableCell>{measurement.parameter}</TableCell>
+                                                                    <TableCell className="font-semibold text-primary-600">{measurement.value}</TableCell>
+                                                                    <TableCell>{measurement.unit}</TableCell>
+                                                                    <TableCell className="text-sm">{measurement.measuredBy}</TableCell>
+                                                                    <TableCell className="text-sm text-gray-600">{measurement.remarks || '-'}</TableCell>
+                                                                </TableRow>
+                                                            ))}
+                                                        </TableBody>
+                                                    </Table>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </Card>
+                            )}
+
                             <div className="flex justify-end">
                                 <Button variant="primary" onClick={handlePreview}>
                                     <Eye size={18} className="mr-2" />
@@ -320,6 +383,66 @@ export const ReportGenerationPage: React.FC = () => {
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* Environmental Sampling Data (if available) */}
+                        {selectedCRF?.environmentalData && (
+                            <div className="mb-8">
+                                <h3 className="text-sm font-bold text-gray-800 mb-3 uppercase border-b border-gray-400 pb-1">
+                                    Environmental Sampling Data:
+                                </h3>
+                                <div className="ml-2 mb-4">
+                                    <p className="text-sm mb-1">
+                                        <span className="font-semibold">Map Type:</span> {selectedCRF.environmentalData.mapType === 'satellite' ? 'Satellite View' : 'Standard Map'}
+                                    </p>
+                                    <p className="text-sm mb-1">
+                                        <span className="font-semibold">Total Sampling Points:</span> {selectedCRF.environmentalData.samplingPoints.length}
+                                    </p>
+                                    <p className="text-sm mb-1">
+                                        <span className="font-semibold">Submitted By:</span> {selectedCRF.environmentalData.submittedBy}
+                                    </p>
+                                    <p className="text-sm">
+                                        <span className="font-semibold">Submitted At:</span> {new Date(selectedCRF.environmentalData.submittedAt).toLocaleString('en-GB')}
+                                    </p>
+                                </div>
+
+                                {/* Sampling Points */}
+                                {selectedCRF.environmentalData.samplingPoints.map((point) => (
+                                    <div key={point.id} className="mb-6">
+                                        <h4 className="text-sm font-semibold text-primary-700 mb-2 bg-primary-50 px-2 py-1">
+                                            Point {point.pointNumber}: {point.locationName}
+                                        </h4>
+                                        <p className="text-xs text-gray-600 mb-2 ml-2">
+                                            GPS: {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
+                                        </p>
+                                        
+                                        {point.measurements.length > 0 && (
+                                            <table className="w-full border-collapse border border-gray-400 text-xs mb-2">
+                                                <thead>
+                                                    <tr className="bg-gray-100">
+                                                        <th className="border border-gray-400 px-2 py-1 text-left font-semibold">Parameter</th>
+                                                        <th className="border border-gray-400 px-2 py-1 text-left font-semibold">Value</th>
+                                                        <th className="border border-gray-400 px-2 py-1 text-left font-semibold">Unit</th>
+                                                        <th className="border border-gray-400 px-2 py-1 text-left font-semibold">Measured By</th>
+                                                        <th className="border border-gray-400 px-2 py-1 text-left font-semibold">Remarks</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {point.measurements.map((measurement, mIndex) => (
+                                                        <tr key={mIndex}>
+                                                            <td className="border border-gray-400 px-2 py-1">{measurement.parameter}</td>
+                                                            <td className="border border-gray-400 px-2 py-1 font-semibold text-primary-700">{measurement.value}</td>
+                                                            <td className="border border-gray-400 px-2 py-1">{measurement.unit}</td>
+                                                            <td className="border border-gray-400 px-2 py-1">{measurement.measuredBy}</td>
+                                                            <td className="border border-gray-400 px-2 py-1 text-gray-600">{measurement.remarks || '-'}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
 
                         {/* Notes */}
                         <div className="mb-8">

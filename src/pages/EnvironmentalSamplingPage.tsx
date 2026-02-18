@@ -6,7 +6,8 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
-import { useWorkflow } from '../context/WorkflowContext';
+import { SignatureCanvas } from '../components/SignatureCanvas';
+import { useWorkflow, type EnvironmentalSamplingData } from '../context/WorkflowContext';
 import { MapPin, Camera, Trash2, Plus, Navigation, FileText, Download } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -49,34 +50,33 @@ const LocationMarker: React.FC<{ onAddPoint: (lat: number, lng: number) => void 
     return null;
 };
 
-// Create numbered marker icons
+// Create numbered marker icons - small pin with number on top (screenshot-friendly)
 const createNumberedIcon = (number: number) => {
     return L.divIcon({
         className: 'custom-numbered-marker',
         html: `
-            <div style="
-                background: #3b82f6;
-                color: white;
-                width: 32px;
-                height: 32px;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-weight: bold;
-                font-size: 16px;
-                border: 3px solid white;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            ">${number}</div>
+            <div style="position: relative; width: 30px; height: 40px; font-family: Arial, sans-serif;">
+                <svg width="30" height="40" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Pin point at bottom -->
+                    <circle cx="15" cy="38" r="2" fill="#1e40af"/>
+                    <!-- Pin body (triangle) -->
+                    <path d="M 9 28 L 15 38 L 21 28 Z" fill="#1e40af"/>
+                    <!-- Number circle -->
+                    <circle cx="15" cy="9" r="9" fill="#ffffff" stroke="#1e40af" stroke-width="2"/>
+                    <!-- Number text -->
+                    <text x="15" y="9" text-anchor="middle" dominant-baseline="middle" 
+                          font-size="11" font-weight="bold" fill="#1e40af" font-family="Arial, sans-serif">${number}</text>
+                </svg>
+            </div>
         `,
-        iconSize: [32, 32],
-        iconAnchor: [16, 32],
-        popupAnchor: [0, -32]
+        iconSize: [30, 40],
+        iconAnchor: [15, 40],
+        popupAnchor: [0, -40]
     });
 };
 
 export const EnvironmentalSamplingPage: React.FC = () => {
-    const { crfs, getCRFsByStatus, updateCRFStatus } = useWorkflow();
+    const { crfs, getCRFsByStatus, updateCRF, updateCRFStatus } = useWorkflow();
     const [selectedCRFId, setSelectedCRFId] = useState<string>('');
     const [samplingPoints, setSamplingPoints] = useState<GPSSamplingPoint[]>([]);
     const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
@@ -97,6 +97,8 @@ export const EnvironmentalSamplingPage: React.FC = () => {
         conclusion: '',
         recommendations: ''
     });
+    const [preparedBySignature, setPreparedBySignature] = useState('');
+    const [reviewedBySignature, setReviewedBySignature] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const reportRef = useRef<HTMLDivElement>(null);
 
@@ -268,66 +270,206 @@ export const EnvironmentalSamplingPage: React.FC = () => {
             return;
         }
 
-        // TODO: Save sampling data to context/backend
-        // For now, just update CRF status
+        // Save environmental sampling data to CRF
+        const environmentalData: EnvironmentalSamplingData = {
+            crfId: selectedCRFId,
+            samplingPoints: samplingPoints,
+            mapType: mapType,
+            submittedAt: new Date().toISOString(),
+            submittedBy: 'Field Officer' // You can make this dynamic
+        };
+
+        // Update CRF with environmental data
+        updateCRF(selectedCRFId, { environmentalData });
+
+        // Update CRF status to review
         updateCRFStatus(selectedCRFId, 'review');
         setIsSubmitted(true);
-        alert('Environmental sampling data submitted successfully! CRF moved to Review status.');
+        alert('Environmental sampling data submitted successfully! CRF moved to Review status with field data attached.');
     };
 
     const handleGenerateReport = async () => {
-        if (!reportRef.current) return;
-
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        const margin = 15;
-
-        // Capture the report content as canvas
-        const canvas = await html2canvas(reportRef.current, {
-            scale: 2,
-            logging: false,
-            useCORS: true
-        });
-
-        const imgWidth = pageWidth - 2 * margin;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        let heightLeft = imgHeight;
-        let position = margin;
-
-        // Add first page
-        const imgData = canvas.toDataURL('image/png');
-        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
-        heightLeft -= (pageHeight - 2 * margin);
-
-        // Add additional pages if content is longer
-        while (heightLeft > 0) {
-            position = heightLeft - imgHeight + margin;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
-            heightLeft -= (pageHeight - 2 * margin);
+        if (!reportRef.current) {
+            alert('Report container not found');
+            return;
         }
 
-        pdf.save(`Environmental_Sampling_Report_${selectedCRFId}_${Date.now()}.pdf`);
+        if (samplingPoints.length === 0) {
+            alert('No sampling points to include in the report');
+            return;
+        }
+
+        console.log('Generating report with', samplingPoints.length, 'sampling points');
+        console.log('Sampling points data:', samplingPoints);
+
+        try {
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const margin = 15;
+
+            // First, capture the site map
+            const mapElement = document.querySelector('.leaflet-container') as HTMLElement;
+            let mapImgData = '';
+            
+            if (mapElement) {
+                console.log('Capturing map...');
+                const mapInstance = (mapElement as any)._leaflet_map;
+                if (mapInstance) {
+                    mapInstance.invalidateSize();
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                const mapCanvas = await html2canvas(mapElement, {
+                    useCORS: true,
+                    logging: false,
+                    allowTaint: true,
+                    scale: 2,
+                    backgroundColor: '#ffffff'
+                });
+
+                mapImgData = mapCanvas.toDataURL('image/png');
+                console.log('Map captured successfully');
+            }
+
+            // Capture the report content
+            console.log('Capturing report content...');
+            const reportCanvas = await html2canvas(reportRef.current, {
+                scale: 2,
+                logging: false,
+                useCORS: true,
+                backgroundColor: '#ffffff',
+                windowWidth: reportRef.current.scrollWidth,
+                windowHeight: reportRef.current.scrollHeight
+            });
+
+            console.log('Report content captured');
+
+            const imgWidth = pageWidth - 2 * margin;
+            let imgHeight = (reportCanvas.height * imgWidth) / reportCanvas.width;
+            let heightLeft = imgHeight;
+            let position = margin;
+
+            // Add report content pages
+            const reportImgData = reportCanvas.toDataURL('image/png');
+            pdf.addImage(reportImgData, 'PNG', margin, position, imgWidth, imgHeight);
+            heightLeft -= (pageHeight - 2 * margin);
+
+            let pageCount = 1;
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight + margin;
+                pdf.addPage();
+                pageCount++;
+                pdf.addImage(reportImgData, 'PNG', margin, position, imgWidth, imgHeight);
+                heightLeft -= (pageHeight - 2 * margin);
+            }
+
+            console.log('Added', pageCount, 'pages of report content');
+
+            // Add site map on new page if available
+            if (mapImgData) {
+                pdf.addPage();
+                console.log('Adding map page');
+                
+                // Add title
+                pdf.setFontSize(16);
+                pdf.setFont('helvetica', 'bold');
+                pdf.text('Site Map with Sampling Locations', pageWidth / 2, margin + 5, { align: 'center' });
+                
+                // Add subtitle with map type
+                pdf.setFontSize(10);
+                pdf.setFont('helvetica', 'normal');
+                pdf.text(`Map View: ${mapType === 'satellite' ? 'Satellite Imagery' : 'Standard Map'}`, pageWidth / 2, margin + 12, { align: 'center' });
+
+                // Create image from map data
+                const img = new Image();
+                img.src = mapImgData;
+                
+                await new Promise((resolve) => {
+                    img.onload = resolve;
+                });
+
+                const mapImgWidth = pageWidth - 2 * margin;
+                const mapImgHeight = (img.height * mapImgWidth) / img.width;
+                
+                const mapY = margin + 20;
+                const maxMapHeight = pageHeight - margin - 30;
+                const finalMapHeight = Math.min(mapImgHeight, maxMapHeight);
+                
+                pdf.addImage(mapImgData, 'PNG', margin, mapY, mapImgWidth, finalMapHeight);
+                
+                // Add legend
+                const legendY = mapY + finalMapHeight + 10;
+                if (legendY + 20 < pageHeight - margin) {
+                    pdf.setFontSize(9);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.text('Sampling Points:', margin, legendY);
+                    
+                    pdf.setFont('helvetica', 'normal');
+                    let legendText = '';
+                    samplingPoints.forEach(point => {
+                        legendText += `${point.pointNumber}. ${point.locationName} (${point.latitude.toFixed(6)}, ${point.longitude.toFixed(6)}) `;
+                    });
+                    
+                    const splitText = pdf.splitTextToSize(legendText, pageWidth - 2 * margin);
+                    pdf.text(splitText, margin, legendY + 5);
+                }
+
+                console.log('Map page added with', samplingPoints.length, 'points in legend');
+            } else {
+                console.log('No map data available');
+            }
+
+            const filename = `Environmental_Sampling_Report_${selectedCRFId}_${new Date().toISOString().slice(0,10)}.pdf`;
+            pdf.save(filename);
+            console.log('PDF saved:', filename);
+            alert('Report with site map generated successfully!');
+        } catch (error) {
+            console.error('Error generating report:', error);
+            alert('Error generating report: ' + (error as Error).message);
+        }
     };
 
     const handleExportMapImage = async () => {
-        const mapElement = document.querySelector('.leaflet-container') as HTMLElement;
-        if (!mapElement) return;
-
         try {
+            const mapElement = document.querySelector('.leaflet-container') as HTMLElement;
+            if (!mapElement) {
+                alert('Map not found');
+                return;
+            }
+
+            // Force map to invalidate size and render properly
+            const mapInstance = (mapElement as any)._leaflet_map;
+            if (mapInstance) {
+                mapInstance.invalidateSize();
+            }
+            
+            // Wait for all tiles and markers to fully load
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
             const canvas = await html2canvas(mapElement, {
                 useCORS: true,
-                logging: false
+                logging: false,
+                allowTaint: true,
+                scale: 2,
+                backgroundColor: '#ffffff',
+                imageTimeout: 15000
             });
             
+            if (canvas.width === 0 || canvas.height === 0) {
+                throw new Error('Failed to capture map');
+            }
+            
             const link = document.createElement('a');
-            link.download = `site_map_${selectedCRFId}_${Date.now()}.png`;
-            link.href = canvas.toDataURL();
+            link.download = `site_map_${selectedCRFId}_${new Date().toISOString().slice(0,10)}.png`;
+            link.href = canvas.toDataURL('image/png', 1.0);
             link.click();
+            
+            alert('Site map exported successfully!');
         } catch (error) {
             console.error('Error exporting map:', error);
-            alert('Error exporting map image');
+            alert('Error exporting map. Please ensure the map has fully loaded and try again.');
         }
     };
 
@@ -804,44 +946,15 @@ export const EnvironmentalSamplingPage: React.FC = () => {
                                     />
                                 </div>
 
-                                {/* Site Map */}
+                                {/* Site Map - Note in report */}
                                 <div className="mb-6">
                                     <h4 className="font-bold text-lg mb-3">3. Site Map with Sampling Locations</h4>
-                                    <div className="rounded-lg overflow-hidden border">
-                                        <MapContainer
-                                            center={mapCenter}
-                                            zoom={mapType === 'satellite' ? 19 : 16}
-                                            style={{ height: '400px', width: '100%' }}
-                                            scrollWheelZoom={false}
-                                        >
-                                            <TileLayer
-                                                url={
-                                                    mapType === 'satellite'
-                                                        ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-                                                        : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-                                                }
-                                                attribution={
-                                                    mapType === 'satellite'
-                                                        ? '&copy; <a href="https://www.esri.com/">Esri</a>'
-                                                        : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                                                }
-                                                maxZoom={mapType === 'satellite' ? 19 : 18}
-                                            />
-                                            {samplingPoints.map((point) => (
-                                                <Marker
-                                                    key={point.id}
-                                                    position={[point.latitude, point.longitude]}
-                                                    icon={createNumberedIcon(point.pointNumber)}
-                                                >
-                                                    <Popup>
-                                                        <div className="p-2">
-                                                            <p className="font-bold">{point.locationName}</p>
-                                                            <p className="text-xs">{point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}</p>
-                                                        </div>
-                                                    </Popup>
-                                                </Marker>
-                                            ))}
-                                        </MapContainer>
+                                    <div className="p-4 bg-blue-50 border-2 border-blue-200 rounded">
+                                        <p className="text-sm text-gray-700">
+                                            <strong>Note:</strong> The detailed site map with all {samplingPoints.length} sampling locations 
+                                            is included on a separate page in the PDF report. The map shows GPS coordinates and numbered markers 
+                                            for each sampling point.
+                                        </p>
                                     </div>
                                 </div>
 
@@ -914,26 +1027,37 @@ export const EnvironmentalSamplingPage: React.FC = () => {
                                 </div>
 
                                 {/* Signatures */}
-                                <div className="mt-8 pt-6 border-t grid grid-cols-2 gap-8">
-                                    <div>
-                                        <label className="text-sm font-medium text-gray-600">Prepared By:</label>
-                                        <input
-                                            type="text"
-                                            value={reportData.preparedBy}
-                                            onChange={(e) => setReportData({ ...reportData, preparedBy: e.target.value })}
-                                            placeholder="Name and signature"
-                                            className="w-full mt-2 px-2 py-1 border-b-2 border-gray-300"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-medium text-gray-600">Reviewed By:</label>
-                                        <input
-                                            type="text"
-                                            value={reportData.reviewedBy}
-                                            onChange={(e) => setReportData({ ...reportData, reviewedBy: e.target.value })}
-                                            placeholder="Name and signature"
-                                            className="w-full mt-2 px-2 py-1 border-b-2 border-gray-300"
-                                        />
+                                <div className="mt-8 pt-6 border-t">
+                                    <h4 className="font-bold text-lg mb-4">Signatures</h4>
+                                    <div className="grid grid-cols-2 gap-8">
+                                        <div>
+                                            <label className="text-sm font-medium text-gray-600 mb-2 block">Prepared By:</label>
+                                            <input
+                                                type="text"
+                                                value={reportData.preparedBy}
+                                                onChange={(e) => setReportData({ ...reportData, preparedBy: e.target.value })}
+                                                placeholder="Enter name"
+                                                className="w-full mb-2 px-2 py-1 border rounded"
+                                            />
+                                            <SignatureCanvas 
+                                                onSave={setPreparedBySignature} 
+                                                savedSignature={preparedBySignature}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-sm font-medium text-gray-600 mb-2 block">Reviewed By:</label>
+                                            <input
+                                                type="text"
+                                                value={reportData.reviewedBy}
+                                                onChange={(e) => setReportData({ ...reportData, reviewedBy: e.target.value })}
+                                                placeholder="Enter name"
+                                                className="w-full mb-2 px-2 py-1 border rounded"
+                                            />
+                                            <SignatureCanvas 
+                                                onSave={setReviewedBySignature}
+                                                savedSignature={reviewedBySignature}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>

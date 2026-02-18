@@ -7,8 +7,8 @@ import { Select } from '../components/ui/Select';
 import { SignatureCanvas } from '../components/SignatureCanvas';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/Table';
 import { useWorkflow } from '../context/WorkflowContext';
-import { mockCustomers, mockParameters, sampleTypes, samplingTypes, priorities } from '../data/mockData';
-import { Edit, Eye, Camera } from 'lucide-react';
+import { mockCustomers, sampleTypes, sampleTypeConfigs, priorities } from '../data/mockData';
+import { Edit, Eye, Camera, Plus } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -32,8 +32,8 @@ export const CRFPage: React.FC = () => {
         email: '',
         sampleType: '',
         testParameters: [] as string[],
+        availableParameters: [] as string[], // Parameters based on sample type
         numberOfSamples: 1,
-        samplingType: 'Customer Submission',
         receptionDate: new Date().toISOString().slice(0, 16),
         receivedBy: '',
         signature: '',
@@ -42,6 +42,19 @@ export const CRFPage: React.FC = () => {
         quotationRef: '',
         sampleImages: [] as string[], // Array of base64 images
     });
+
+    const handleSampleTypeChange = (sampleType: string) => {
+        // Load parameters for the selected sample type
+        const config = sampleTypeConfigs.find(c => c.name === sampleType);
+        const availableParams = config ? config.parameters : [];
+        
+        setFormData(prev => ({
+            ...prev,
+            sampleType,
+            availableParameters: availableParams,
+            testParameters: [] // Reset selected parameters when sample type changes
+        }));
+    };
 
     const handleQuotationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const quotationId = e.target.value;
@@ -52,6 +65,11 @@ export const CRFPage: React.FC = () => {
 
         const quotation = quotations.find(q => q.requestId === quotationId);
         if (quotation) {
+            // Get available parameters for the sample type
+            const sampleType = quotation.sampleType || formData.sampleType;
+            const config = sampleTypeConfigs.find(c => c.name === sampleType);
+            const availableParams = config ? config.parameters : [];
+
             // Auto-fill form with quotation data
             setFormData({
                 ...formData,
@@ -61,9 +79,9 @@ export const CRFPage: React.FC = () => {
                 contact: quotation.contact,
                 email: quotation.email,
                 testParameters: quotation.parameters.map(p => p.name),
-                sampleType: quotation.sampleType || formData.sampleType,
+                sampleType: sampleType,
+                availableParameters: availableParams,
                 numberOfSamples: quotation.numberOfSamples || formData.numberOfSamples,
-                samplingType: quotation.samplingType || formData.samplingType,
                 priority: quotation.priority || formData.priority,
             });
         }
@@ -178,11 +196,16 @@ export const CRFPage: React.FC = () => {
             return;
         }
 
+        const crfData = {
+            ...formData,
+            samplingType: 'One Time' // Default value since we removed the field
+        };
+
         if (editingCRF) {
-            updateCRF(editingCRF, formData);
+            updateCRF(editingCRF, crfData);
             alert('CRF updated successfully!');
         } else {
-            addCRF(formData);
+            addCRF(crfData);
             alert('CRF created successfully!');
         }
 
@@ -199,8 +222,8 @@ export const CRFPage: React.FC = () => {
             email: '',
             sampleType: '',
             testParameters: [],
+            availableParameters: [],
             numberOfSamples: 1,
-            samplingType: 'Customer Submission',
             receptionDate: new Date().toISOString().slice(0, 16),
             receivedBy: '',
             signature: '',
@@ -214,6 +237,9 @@ export const CRFPage: React.FC = () => {
     };
 
     const handleEdit = (crf: any) => {
+        const config = sampleTypeConfigs.find(c => c.name === crf.sampleType);
+        const availableParams = config ? config.parameters : [];
+
         setFormData({
             crfType: crf.crfType,
             customer: crf.customer,
@@ -222,8 +248,8 @@ export const CRFPage: React.FC = () => {
             email: crf.email,
             sampleType: crf.sampleType,
             testParameters: crf.testParameters,
+            availableParameters: availableParams,
             numberOfSamples: crf.numberOfSamples,
-            samplingType: crf.samplingType,
             receptionDate: crf.receptionDate,
             receivedBy: crf.receivedBy,
             signature: crf.signature,
@@ -593,7 +619,7 @@ export const CRFPage: React.FC = () => {
                             <Select
                                 label="Sample Type"
                                 value={formData.sampleType}
-                                onChange={(e) => setFormData({ ...formData, sampleType: e.target.value })}
+                                onChange={(e) => handleSampleTypeChange(e.target.value)}
                                 options={sampleTypes.map(t => ({ value: t, label: t }))}
                                 required
                             />
@@ -623,50 +649,50 @@ export const CRFPage: React.FC = () => {
                             />
 
                             <div className="mb-4 md:col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Test Parameters <span className="text-red-500">*</span>
-                                </label>
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className="block text-sm font-medium text-gray-700">
+                                        Test Parameters <span className="text-red-500">*</span>
+                                    </label>
+                                    {formData.sampleType && formData.availableParameters.length > formData.testParameters.length && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                // Find first unselected parameter and add it
+                                                const unselected = formData.availableParameters.find(p => !formData.testParameters.includes(p));
+                                                if (unselected) handleParameterToggle(unselected);
+                                            }}
+                                            className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium"
+                                        >
+                                            <Plus size={16} />
+                                            Add More Parameters
+                                        </button>
+                                    )}
+                                </div>
                                 {formData.sampleType ? (
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                        {mockParameters
-                                            .filter(param => param.sampleTypes.includes(formData.sampleType))
-                                            .map(param => (
-                                                <label key={param.name} className="flex items-center gap-2 p-2 border border-gray-200 rounded hover:bg-gray-50 cursor-pointer">
+                                    <>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+                                            {formData.availableParameters.map(paramName => (
+                                                <label key={paramName} className="flex items-center gap-2 p-2 border border-gray-200 rounded hover:bg-gray-50 cursor-pointer">
                                                     <input
                                                         type="checkbox"
-                                                        checked={formData.testParameters.includes(param.name)}
-                                                        onChange={() => handleParameterToggle(param.name)}
+                                                        checked={formData.testParameters.includes(paramName)}
+                                                        onChange={() => handleParameterToggle(paramName)}
                                                         className="w-4 h-4 text-primary-600"
                                                     />
-                                                    <span className="text-sm text-gray-700">{param.name}</span>
+                                                    <span className="text-sm text-gray-700">{paramName}</span>
                                                 </label>
                                             ))}
-                                    </div>
+                                        </div>
+                                        {formData.testParameters.length === 0 && (
+                                            <p className="text-sm text-amber-600 italic">Please select at least one parameter</p>
+                                        )}
+                                    </>
                                 ) : (
                                     <p className="text-sm text-gray-500 italic">Please select a sample type first</p>
                                 )}
                             </div>
 
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Sampling Type <span className="text-red-500">*</span>
-                                </label>
-                                <div className="flex gap-4">
-                                    {samplingTypes.map(type => (
-                                        <label key={type} className="flex items-center gap-2">
-                                            <input
-                                                type="radio"
-                                                name="samplingType"
-                                                value={type}
-                                                checked={formData.samplingType === type}
-                                                onChange={(e) => setFormData({ ...formData, samplingType: e.target.value })}
-                                                className="w-4 h-4 text-primary-600"
-                                            />
-                                            <span className="text-sm text-gray-700">{type}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
+                            {/* Remove the Sampling Type section entirely */}
 
                             {/* Sample Images Upload (Optional) */}
                             <div className="mb-4 md:col-span-2">

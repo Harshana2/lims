@@ -181,6 +181,62 @@ export const ReviewSignPage: React.FC = () => {
                         </div>
                     </Card>
 
+                    {/* Environmental Sampling Data (if LS type) */}
+                    {selectedCRF.environmentalData && (
+                        <Card className="mb-6">
+                            <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-3 border-b">
+                                Environmental Sampling Data
+                            </h3>
+                            <div className="mb-4 p-4 bg-blue-50 rounded">
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <span className="font-medium">Sampling Points:</span> {selectedCRF.environmentalData.samplingPoints.length}
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">Map Type:</span> {selectedCRF.environmentalData.mapType === 'satellite' ? 'Satellite View' : 'Standard Map'}
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">Submitted At:</span> {new Date(selectedCRF.environmentalData.submittedAt).toLocaleString()}
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">Submitted By:</span> {selectedCRF.environmentalData.submittedBy}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {selectedCRF.environmentalData.samplingPoints.map((point) => (
+                                <div key={point.id} className="mb-4 border rounded p-4">
+                                    <h5 className="font-bold mb-2">Point {point.pointNumber}: {point.locationName}</h5>
+                                    <p className="text-xs text-gray-600 mb-3">
+                                        GPS: {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
+                                    </p>
+                                    <table className="w-full text-sm border">
+                                        <thead className="bg-gray-100">
+                                            <tr>
+                                                <th className="border p-2 text-left">Parameter</th>
+                                                <th className="border p-2 text-left">Value</th>
+                                                <th className="border p-2 text-left">Unit</th>
+                                                <th className="border p-2 text-left">Measured By</th>
+                                                <th className="border p-2 text-left">Remarks</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {point.measurements.map((m, idx) => (
+                                                <tr key={idx}>
+                                                    <td className="border p-2">{m.parameter}</td>
+                                                    <td className="border p-2 font-semibold">{m.value}</td>
+                                                    <td className="border p-2">{m.unit}</td>
+                                                    <td className="border p-2">{m.measuredBy}</td>
+                                                    <td className="border p-2">{m.remarks || '-'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ))}
+                        </Card>
+                    )}
+
                     {/* Review Section */}
                     <Card className="mb-6">
                         <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-3 border-b">Supervisor Review</h3>

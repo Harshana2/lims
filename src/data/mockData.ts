@@ -180,8 +180,159 @@ export const mockChemists: Chemist[] = [
     { id: '2', name: 'S.A.A.G. Senarathna' },
     { id: '3', name: 'K.M. Perera' },
     { id: '4', name: 'A.B. Jayawardena' },
+    { id: '5', name: 'R.P. Silva' },
+    { id: '6', name: 'N.T. Fernando' },
+];
+
+// Mock data for dashboard charts and analytics
+export interface PendingTask {
+    id: string;
+    crfId: string;
+    customer: string;
+    sampleType: string;
+    taskType: 'Testing' | 'Review' | 'Report Generation';
+    assignedTo: string;
+    dueDate: string; // ISO date string
+    priority: 'Normal' | 'Urgent' | 'Rush';
+    status: 'On Track' | 'At Risk' | 'Overdue';
+}
+
+export interface ChemistWorkload {
+    chemistId: string;
+    chemistName: string;
+    activeTasks: number;
+    completedThisWeek: number;
+    pendingTests: number;
+    overdueTests: number;
+}
+
+export const mockPendingTasks: PendingTask[] = [
+    {
+        id: 'TASK-001',
+        crfId: 'CRF-001',
+        customer: 'Edinburgh Products',
+        sampleType: 'Wastewater',
+        taskType: 'Testing',
+        assignedTo: 'D.H.S. Costa',
+        dueDate: '2026-02-20',
+        priority: 'Urgent',
+        status: 'At Risk'
+    },
+    {
+        id: 'TASK-002',
+        crfId: 'CRF-002',
+        customer: 'Green Valley Industries',
+        sampleType: 'Drinking Water',
+        taskType: 'Testing',
+        assignedTo: 'S.A.A.G. Senarathna',
+        dueDate: '2026-02-19',
+        priority: 'Rush',
+        status: 'Overdue'
+    },
+    {
+        id: 'TASK-003',
+        crfId: 'CRF-003',
+        customer: 'Ocean Foods Ltd',
+        sampleType: 'Food',
+        taskType: 'Review',
+        assignedTo: 'K.M. Perera',
+        dueDate: '2026-02-22',
+        priority: 'Normal',
+        status: 'On Track'
+    },
+    {
+        id: 'TASK-004',
+        crfId: 'CRF-004',
+        customer: 'Tech Solutions Inc',
+        sampleType: 'Industrial Effluent',
+        taskType: 'Testing',
+        assignedTo: 'A.B. Jayawardena',
+        dueDate: '2026-02-21',
+        priority: 'Urgent',
+        status: 'On Track'
+    },
+    {
+        id: 'TASK-005',
+        crfId: 'CRF-005',
+        customer: 'Urban Developers',
+        sampleType: 'Noise',
+        taskType: 'Report Generation',
+        assignedTo: 'R.P. Silva',
+        dueDate: '2026-02-23',
+        priority: 'Normal',
+        status: 'On Track'
+    },
+];
+
+export const mockChemistWorkload: ChemistWorkload[] = [
+    {
+        chemistId: '1',
+        chemistName: 'D.H.S. Costa',
+        activeTasks: 5,
+        completedThisWeek: 12,
+        pendingTests: 3,
+        overdueTests: 0
+    },
+    {
+        chemistId: '2',
+        chemistName: 'S.A.A.G. Senarathna',
+        activeTasks: 7,
+        completedThisWeek: 9,
+        pendingTests: 4,
+        overdueTests: 1
+    },
+    {
+        chemistId: '3',
+        chemistName: 'K.M. Perera',
+        activeTasks: 4,
+        completedThisWeek: 15,
+        pendingTests: 2,
+        overdueTests: 0
+    },
+    {
+        chemistId: '4',
+        chemistName: 'A.B. Jayawardena',
+        activeTasks: 6,
+        completedThisWeek: 10,
+        pendingTests: 3,
+        overdueTests: 0
+    },
+    {
+        chemistId: '5',
+        chemistName: 'R.P. Silva',
+        activeTasks: 3,
+        completedThisWeek: 8,
+        pendingTests: 2,
+        overdueTests: 0
+    },
+    {
+        chemistId: '6',
+        chemistName: 'N.T. Fernando',
+        activeTasks: 5,
+        completedThisWeek: 11,
+        pendingTests: 3,
+        overdueTests: 0
+    },
+];
+
+// Monthly test statistics for charts
+export interface MonthlyStats {
+    month: string;
+    tests: number;
+    reports: number;
+}
+
+export const mockMonthlyStats: MonthlyStats[] = [
+    { month: 'Aug', tests: 145, reports: 140 },
+    { month: 'Sep', tests: 168, reports: 165 },
+    { month: 'Oct', tests: 192, reports: 188 },
+    { month: 'Nov', tests: 210, reports: 205 },
+    { month: 'Dec', tests: 178, reports: 175 },
+    { month: 'Jan', tests: 195, reports: 190 },
+    { month: 'Feb', tests: 89, reports: 85 }, // Current month (partial)
 ];
 
 export const sampleTypes = ['Wastewater', 'Drinking Water', 'Industrial Effluent', 'Soil', 'Food', 'Noise'];
 export const priorities = ['Normal', 'Urgent', 'Rush'];
 export const samplingTypes = ['One Time', 'Monthly', 'Quarterly', 'Annually'];
+

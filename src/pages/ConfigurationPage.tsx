@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/Table';
-import { Settings, Users, Building2, Beaker, Plus, Edit, Trash2 } from 'lucide-react';
-import { mockCustomers, mockParameters, sampleTypeConfigs } from '../data/mockData';
+import { Settings, Users, Building2, Beaker, Plus, Edit, Trash2, FlaskConical } from 'lucide-react';
+import { mockCustomers, mockParameters, sampleTypeConfigs, mockChemists } from '../data/mockData';
 
-type TabType = 'users' | 'roles' | 'customers' | 'parameters';
+type TabType = 'users' | 'roles' | 'chemists' | 'customers' | 'parameters';
 
 interface User {
     id: string;
@@ -43,6 +43,7 @@ export const ConfigurationPage: React.FC = () => {
     const tabs = [
         { id: 'users' as TabType, label: 'Users', icon: Users },
         { id: 'roles' as TabType, label: 'User Roles', icon: Settings },
+        { id: 'chemists' as TabType, label: 'Chemists', icon: FlaskConical },
         { id: 'customers' as TabType, label: 'Customers', icon: Building2 },
         { id: 'parameters' as TabType, label: 'Test Parameters', icon: Beaker },
     ];
@@ -171,6 +172,56 @@ export const ConfigurationPage: React.FC = () => {
                             </div>
                         ))}
                     </div>
+                </Card>
+            )}
+
+            {/* Chemists Tab */}
+            {activeTab === 'chemists' && (
+                <Card>
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-lg font-semibold text-gray-800">Chemist Management</h3>
+                        <Button variant="primary">
+                            <Plus size={18} className="mr-2" />
+                            Add Chemist
+                        </Button>
+                    </div>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>ID</TableHead>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Active Tasks</TableHead>
+                                <TableHead>Completed This Week</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {mockChemists.map(chemist => (
+                                <TableRow key={chemist.id}>
+                                    <TableCell className="font-medium">{chemist.id}</TableCell>
+                                    <TableCell>{chemist.name}</TableCell>
+                                    <TableCell className="text-primary-600 font-semibold">-</TableCell>
+                                    <TableCell className="text-green-600">-</TableCell>
+                                    <TableCell>
+                                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                            Active
+                                        </span>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex gap-2">
+                                            <button className="text-blue-600 hover:text-blue-800">
+                                                <Edit size={16} />
+                                            </button>
+                                            <button className="text-red-600 hover:text-red-800">
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
                 </Card>
             )}
 
