@@ -17,13 +17,13 @@ export const Button: React.FC<ButtonProps> = ({
     disabled = false,
     className = '',
 }) => {
-    const baseClasses = 'font-medium py-2 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+    const baseClasses = 'font-semibold py-2.5 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center';
 
     const variantClasses = {
-        primary: 'bg-primary-600 hover:bg-primary-700 text-white shadow-sm hover:shadow-md',
-        secondary: 'bg-gray-200 hover:bg-gray-300 text-gray-800',
-        danger: 'bg-red-600 hover:bg-red-700 text-white shadow-sm hover:shadow-md',
-        success: 'bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md',
+        primary: 'bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-white shadow-soft hover:shadow-md',
+        secondary: 'bg-neutral-border hover:bg-gray-300 text-neutral-textPrimary shadow-sm hover:shadow',
+        danger: 'bg-status-error hover:bg-red-700 text-white shadow-soft hover:shadow-md',
+        success: 'bg-status-success hover:bg-green-700 text-white shadow-soft hover:shadow-md',
     };
 
     return (

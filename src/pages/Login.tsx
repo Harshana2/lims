@@ -4,16 +4,28 @@ import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { FlaskConical } from 'lucide-react';
+import authService from '../services/authService';
 
 export const Login: React.FC = () => {
-    const [email, setEmail] = useState('');
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Mock login - no validation
-        navigate('/dashboard');
+        setError('');
+        setLoading(true);
+
+        try {
+            await authService.login({ username, password });
+            navigate('/dashboard');
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Invalid username or password');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -29,13 +41,19 @@ export const Login: React.FC = () => {
                     <p className="text-gray-600 mt-2">Laboratory Information Management System</p>
                 </div>
 
+                {error && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                        {error}
+                    </div>
+                )}
+
                 <form onSubmit={handleLogin}>
                     <Input
-                        label="Email"
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="Enter your email"
+                        label="Username"
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Enter your username"
                         required
                     />
 
@@ -48,14 +66,16 @@ export const Login: React.FC = () => {
                         required
                     />
 
-                    <Button type="submit" className="w-full mt-6">
-                        Login
+                    <Button type="submit" className="w-full mt-6" disabled={loading}>
+                        {loading ? 'Logging in...' : 'Login'}
                     </Button>
                 </form>
 
-                <p className="text-center text-sm text-gray-500 mt-6">
-                    Demo System - Customer Sample Workflow
-                </p>
+                <div className="mt-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm font-semibold text-blue-900 mb-2">Demo Credentials:</p>
+                    <p className="text-xs text-blue-700">Username: <strong>admin</strong> / Password: <strong>password123</strong></p>
+                    <p className="text-xs text-blue-700">Username: <strong>chemist1</strong> / Password: <strong>password123</strong></p>
+                </div>
             </Card>
         </div>
     );

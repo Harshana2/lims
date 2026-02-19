@@ -1,13 +1,34 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card } from '../components/ui/Card';
 import { WorkflowTimeline } from '../components/WorkflowTimeline';
 import { SampleCollectionCalendar } from '../components/SampleCollectionCalendar';
 import { useWorkflow } from '../context/WorkflowContext';
 import { FileText, FlaskConical, CheckCircle, Clock, TrendingUp, Users, AlertTriangle } from 'lucide-react';
 import { mockPendingTasks, mockChemistWorkload, mockMonthlyStats } from '../data/mockData';
+import crfService, { type CRF } from '../services/crfService';
+import sampleService, { type Sample } from '../services/sampleService';
 
 export const Dashboard: React.FC = () => {
     const workflow = useWorkflow();
+    const [crfs, setCrfs] = useState<CRF[]>([]);
+    const [samples, setSamples] = useState<Sample[]>([]);
+
+    useEffect(() => {
+        loadDashboardData();
+    }, []);
+
+    const loadDashboardData = async () => {
+        try {
+            const [crfsData, samplesData] = await Promise.all([
+                crfService.getAll(),
+                sampleService.getAll(),
+            ]);
+            setCrfs(crfsData);
+            setSamples(samplesData);
+        } catch (error) {
+            console.error('Failed to load dashboard data:', error);
+        }
+    };
 
     const confirmedRequests = workflow.getConfirmedRequests();
     const pendingRequests = workflow.requests.filter(r => r.status === 'pending');
@@ -17,33 +38,41 @@ export const Dashboard: React.FC = () => {
     const atRiskTasks = mockPendingTasks.filter(t => t.status === 'At Risk');
     const onTrackTasks = mockPendingTasks.filter(t => t.status === 'On Track');
 
+    // Use real CRF data for stats
+    const activeSamples = samples.filter(s => s.status === 'testing').length;
+    const pendingReview = crfs.filter(c => c.status === 'review').length;
+
     const stats = [
         {
-            title: 'Total Requests',
-            value: workflow.requests.length.toString(),
+            title: 'Total CRFs',
+            value: crfs.length.toString(),
             icon: FileText,
-            color: 'bg-blue-500',
+            color: 'bg-primary-light',
+            iconColor: 'text-primary-500',
             change: '+12%',
         },
         {
             title: 'Active Tests',
-            value: mockPendingTasks.filter(t => t.taskType === 'Testing').length.toString(),
+            value: activeSamples.toString(),
             icon: FlaskConical,
-            color: 'bg-purple-500',
+            color: 'bg-primary-light',
+            iconColor: 'text-primary-500',
             change: '+8%',
         },
         {
             title: 'Pending Review',
-            value: workflow.crfs.filter(c => c.status === 'review').length.toString(),
+            value: pendingReview.toString(),
             icon: CheckCircle,
-            color: 'bg-green-500',
+            color: 'bg-status-success/10',
+            iconColor: 'text-status-success',
             change: '+5%',
         },
         {
             title: 'Overdue Tasks',
             value: overdueTasks.length.toString(),
             icon: AlertTriangle,
-            color: 'bg-red-500',
+            color: 'bg-status-error/10',
+            iconColor: 'text-status-error',
             change: '-2',
         },
     ];
@@ -72,18 +101,18 @@ export const Dashboard: React.FC = () => {
                     <Card key={index}>
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-gray-600 mb-1">{stat.title}</p>
+                                <p className="text-sm text-neutral-textSecondary mb-2">{stat.title}</p>
                                 <div className="flex items-baseline gap-2">
-                                    <p className="text-3xl font-bold text-gray-800">{stat.value}</p>
-                                    <span className={`text-xs font-medium ${
-                                        stat.change.startsWith('+') ? 'text-green-600' : 'text-red-600'
+                                    <p className="text-3xl font-bold text-neutral-textPrimary">{stat.value}</p>
+                                    <span className={`text-xs font-semibold ${
+                                        stat.change.startsWith('+') ? 'text-status-success' : 'text-status-error'
                                     }`}>
                                         {stat.change}
                                     </span>
                                 </div>
                             </div>
-                            <div className={`w-12 h-12 ${stat.color} rounded-lg flex items-center justify-center`}>
-                                <stat.icon size={24} className="text-white" />
+                            <div className={`w-14 h-14 ${stat.color} rounded-xl flex items-center justify-center`}>
+                                <stat.icon size={28} className={stat.iconColor} />
                             </div>
                         </div>
                     </Card>
