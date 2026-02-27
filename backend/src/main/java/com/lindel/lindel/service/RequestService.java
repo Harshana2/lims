@@ -63,6 +63,7 @@ public class RequestService {
         if (requestDetails.getCustomer() != null) request.setCustomer(requestDetails.getCustomer());
         if (requestDetails.getContact() != null) request.setContact(requestDetails.getContact());
         if (requestDetails.getEmail() != null) request.setEmail(requestDetails.getEmail());
+        if (requestDetails.getAddress() != null) request.setAddress(requestDetails.getAddress());
         if (requestDetails.getSampleType() != null) request.setSampleType(requestDetails.getSampleType());
         if (requestDetails.getParameters() != null) request.setParameters(requestDetails.getParameters());
         if (requestDetails.getNumberOfSamples() != null) request.setNumberOfSamples(requestDetails.getNumberOfSamples());

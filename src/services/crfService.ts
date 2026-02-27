@@ -1,5 +1,6 @@
 import apiClient from './api';
 import type { ApiResponse } from './authService';
+import type { Sample } from './sampleService';
 
 export interface CRF {
   id?: number;
@@ -20,8 +21,10 @@ export interface CRF {
   status: string;
   quotationRef?: string;
   sampleImages?: string[];
+  samples?: Sample[];
   createdAt?: string;
   updatedAt?: string;
+  environmentalData?: string; // JSON string containing GPS, measurements, photos
 }
 
 const crfService = {

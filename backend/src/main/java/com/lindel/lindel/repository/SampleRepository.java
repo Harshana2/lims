@@ -2,6 +2,8 @@ package com.lindel.lindel.repository;
 
 import com.lindel.lindel.entity.Sample;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -25,4 +27,7 @@ public interface SampleRepository extends JpaRepository<Sample, Long> {
     Long countByAssignedTo(String assignedTo);
     
     Boolean existsBySampleId(String sampleId);
+    
+    @Query("SELECT COUNT(s) FROM Sample s WHERE s.sampleId LIKE :prefix%")
+    Long countBySampleIdPrefix(@Param("prefix") String prefix);
 }

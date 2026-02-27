@@ -15,7 +15,6 @@ export const RequestPage: React.FC = () => {
     const [error, setError] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [availableParameters, setAvailableParameters] = useState<string[]>([]);
-    const [isNewCustomer, setIsNewCustomer] = useState(false);
 
     // Load requests from backend
     useEffect(() => {
@@ -49,28 +48,15 @@ export const RequestPage: React.FC = () => {
 
     const handleCustomerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const customerId = e.target.value;
-        
-        if (customerId === 'new') {
-            setIsNewCustomer(true);
+        const customer = mockCustomers.find(c => c.id === customerId);
+        if (customer) {
             setFormData({
                 ...formData,
-                customer: '',
-                address: '',
-                contact: '',
-                email: '',
+                customer: customer.name,
+                address: customer.address,
+                contact: customer.contact,
+                email: customer.email,
             });
-        } else {
-            setIsNewCustomer(false);
-            const customer = mockCustomers.find(c => c.id === customerId);
-            if (customer) {
-                setFormData({
-                    ...formData,
-                    customer: customer.name,
-                    address: customer.address,
-                    contact: customer.contact,
-                    email: customer.email,
-                });
-            }
         }
     };
 
@@ -109,7 +95,6 @@ export const RequestPage: React.FC = () => {
                 customer: formData.customer,
                 contact: formData.contact,
                 email: formData.email,
-                address: formData.address,
                 sampleType: formData.sampleType,
                 parameters: formData.testParameters,
                 numberOfSamples: formData.numberOfSamples,
@@ -131,7 +116,6 @@ export const RequestPage: React.FC = () => {
                 priority: 'Normal',
             });
             setAvailableParameters([]);
-            setIsNewCustomer(false);
             setShowModal(false);
             await loadRequests();
         } catch (err) {
@@ -237,10 +221,7 @@ export const RequestPage: React.FC = () => {
                         <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
                             <h2 className="text-2xl font-semibold text-gray-800">Create New Request</h2>
                             <button
-                                onClick={() => {
-                                    setShowModal(false);
-                                    setIsNewCustomer(false);
-                                }}
+                                onClick={() => setShowModal(false)}
                                 className="text-gray-400 hover:text-gray-600 transition-colors"
                             >
                                 <X className="w-6 h-6" />
@@ -251,31 +232,19 @@ export const RequestPage: React.FC = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <Select
                                     label="Customer"
-                                    value={formData.customer ? mockCustomers.find(c => c.name === formData.customer)?.id || 'new' : ''}
+                                    value={formData.customer ? mockCustomers.find(c => c.name === formData.customer)?.id || '' : ''}
                                     onChange={handleCustomerChange}
                                     options={[
                                         { value: '', label: 'Select Customer' },
-                                        ...mockCustomers.map(c => ({ value: c.id, label: c.name })),
-                                        { value: 'new', label: '+ Add New Customer' }
+                                        ...mockCustomers.map(c => ({ value: c.id, label: c.name }))
                                     ]}
                                     required
                                 />
-
-                                {isNewCustomer && (
-                                    <Input
-                                        label="Customer Name"
-                                        value={formData.customer}
-                                        onChange={(e) => setFormData({ ...formData, customer: e.target.value })}
-                                        placeholder="Enter customer name"
-                                        required
-                                    />
-                                )}
 
                                 <Input
                                     label="Contact Person"
                                     value={formData.contact}
                                     onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
-                                    disabled={!isNewCustomer && formData.customer !== ''}
                                     required
                                 />
 
@@ -284,7 +253,6 @@ export const RequestPage: React.FC = () => {
                                     type="email"
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    disabled={!isNewCustomer && formData.customer !== ''}
                                     required
                                 />
 
@@ -292,7 +260,6 @@ export const RequestPage: React.FC = () => {
                                     label="Address"
                                     value={formData.address}
                                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                                    disabled={!isNewCustomer && formData.customer !== ''}
                                     required
                                 />
 
@@ -310,8 +277,9 @@ export const RequestPage: React.FC = () => {
                                 <Input
                                     label="Number of Samples"
                                     type="number"
+                                    min="1"
                                     value={formData.numberOfSamples.toString()}
-                                    onChange={(e) => setFormData({ ...formData, numberOfSamples: Math.max(1, parseInt(e.target.value) || 1) })}
+                                    onChange={(e) => setFormData({ ...formData, numberOfSamples: parseInt(e.target.value) || 1 })}
                                     required
                                 />
 
@@ -364,10 +332,7 @@ export const RequestPage: React.FC = () => {
                             <div className="mt-8 flex justify-end gap-3">
                                 <Button
                                     type="button"
-                                    onClick={() => {
-                                        setShowModal(false);
-                                        setIsNewCustomer(false);
-                                    }}
+                                    onClick={() => setShowModal(false)}
                                     className="bg-gray-200 text-gray-700 hover:bg-gray-300"
                                 >
                                     Cancel

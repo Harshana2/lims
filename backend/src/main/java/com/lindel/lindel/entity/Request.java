@@ -30,6 +30,7 @@ public class Request {
     
     private String contact;
     private String email;
+    private String address;
     
     @Column(nullable = false)
     private String sampleType;
@@ -51,8 +52,7 @@ public class Request {
     private Long quotationId; // Reference to generated quotation
     private Long crfId; // Reference to CRF if converted
     
-    @Lob
-    @Column(length = 5000)
+    @Column(columnDefinition = "TEXT")
     private String notes;
     
     @CreationTimestamp

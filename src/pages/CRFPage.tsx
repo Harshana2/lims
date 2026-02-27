@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -6,23 +6,51 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { SignatureCanvas } from '../components/SignatureCanvas';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/Table';
-import { useWorkflow } from '../context/WorkflowContext';
+import { crfService, quotationService, type CRF, type Quotation } from '../services';
 import { mockCustomers, sampleTypes, sampleTypeConfigs, priorities } from '../data/mockData';
 import { Edit, Eye, Camera, Plus } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 export const CRFPage: React.FC = () => {
-    const { crfs, addCRF, updateCRF, updateCRFStatus, quotations } = useWorkflow();
+    // Replace WorkflowContext with API services
+    const [crfs, setCrfs] = useState<CRF[]>([]);
+    const [quotations, setQuotations] = useState<Quotation[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [editingCRF, setEditingCRF] = useState<string | null>(null);
     const [showPreview, setShowPreview] = useState(false);
     const [previewCRFId, setPreviewCRFId] = useState<string | null>(null);
     const [showCamera, setShowCamera] = useState(false);
+    const [isNewCustomer, setIsNewCustomer] = useState(false);
     const crfRef = useRef<HTMLDivElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
+
+    // Load CRFs and Quotations from backend
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        try {
+            setLoading(true);
+            const [crfsData, quotationsData] = await Promise.all([
+                crfService.getAll(),
+                quotationService.getAll()
+            ]);
+            setCrfs(crfsData);
+            setQuotations(quotationsData);
+            setError('');
+        } catch (err) {
+            console.error('Failed to load data:', err);
+            setError('Failed to load CRFs. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const [formData, setFormData] = useState({
         crfType: 'CS' as 'CS' | 'LS',
@@ -89,15 +117,28 @@ export const CRFPage: React.FC = () => {
 
     const handleCustomerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const customerId = e.target.value;
-        const customer = mockCustomers.find(c => c.id === customerId);
-        if (customer) {
+        
+        if (customerId === 'new') {
+            setIsNewCustomer(true);
             setFormData({
                 ...formData,
-                customer: customer.name,
-                address: customer.address,
-                contact: customer.contact,
-                email: customer.email,
+                customer: '',
+                address: '',
+                contact: '',
+                email: '',
             });
+        } else {
+            setIsNewCustomer(false);
+            const customer = mockCustomers.find(c => c.id === customerId);
+            if (customer) {
+                setFormData({
+                    ...formData,
+                    customer: customer.name,
+                    address: customer.address,
+                    contact: customer.contact,
+                    email: customer.email,
+                });
+            }
         }
     };
 
@@ -188,7 +229,7 @@ export const CRFPage: React.FC = () => {
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         
         if (!formData.signature || !formData.receivedBy) {
@@ -196,21 +237,27 @@ export const CRFPage: React.FC = () => {
             return;
         }
 
-        const crfData = {
-            ...formData,
-            samplingType: 'One Time' // Default value since we removed the field
-        };
+        try {
+            const crfData = {
+                ...formData,
+                samplingType: 'One Time' // Default value since we removed the field
+            };
 
-        if (editingCRF) {
-            updateCRF(editingCRF, crfData);
-            alert('CRF updated successfully!');
-        } else {
-            addCRF(crfData);
-            alert('CRF created successfully!');
+            if (editingCRF) {
+                await crfService.update(parseInt(editingCRF), crfData);
+                alert('CRF updated successfully!');
+            } else {
+                await crfService.create(crfData);
+                alert('CRF created successfully!');
+            }
+
+            // Reload data and reset form
+            await loadData();
+            resetForm();
+        } catch (err) {
+            console.error('Failed to save CRF:', err);
+            alert('Failed to save CRF. Please try again.');
         }
-
-        // Reset form
-        resetForm();
     };
 
     const resetForm = () => {
@@ -232,6 +279,7 @@ export const CRFPage: React.FC = () => {
             quotationRef: '',
             sampleImages: [],
         });
+        setIsNewCustomer(false);
         setShowForm(false);
         setEditingCRF(null);
     };
@@ -253,7 +301,7 @@ export const CRFPage: React.FC = () => {
             receptionDate: crf.receptionDate,
             receivedBy: crf.receivedBy,
             signature: crf.signature,
-            date: crf.date,
+            date: crf.receptionDate ? new Date(crf.receptionDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
             priority: crf.priority,
             quotationRef: crf.quotationRef || '',
             sampleImages: crf.sampleImages || [],
@@ -262,12 +310,20 @@ export const CRFPage: React.FC = () => {
         setShowForm(true);
     };
 
-    const handleStatusChange = (crfId: string, newStatus: any) => {
-        updateCRFStatus(crfId, newStatus);
+    const handleStatusChange = async (crfId: number | undefined, newStatus: any) => {
+        if (!crfId) return;
+        try {
+            await crfService.updateStatus(crfId, newStatus);
+            await loadData();
+        } catch (err) {
+            console.error('Failed to update status:', err);
+            alert('Failed to update status.');
+        }
     };
 
-    const handlePreview = (crfId: string) => {
-        setPreviewCRFId(crfId);
+    const handlePreview = (crfId: number | undefined) => {
+        if (!crfId) return;
+        setPreviewCRFId(crfId.toString());
         setShowPreview(true);
     };
 
@@ -305,7 +361,7 @@ export const CRFPage: React.FC = () => {
             pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
         }
 
-        const selectedCRF = crfs.find(c => c.id === previewCRFId);
+        const selectedCRF = crfs?.find(c => c.id?.toString() === previewCRFId);
         pdf.save(`CRF_${selectedCRF?.id}_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
@@ -323,7 +379,7 @@ export const CRFPage: React.FC = () => {
         return <span className={`px-3 py-1 rounded text-sm font-medium ${config.class}`}>{config.label}</span>;
     };
 
-    const selectedCRF = crfs.find(c => c.id === previewCRFId);
+    const selectedCRF = crfs?.find(c => c.id?.toString() === previewCRFId);
 
     if (showPreview && selectedCRF) {
         return (
@@ -370,7 +426,7 @@ export const CRFPage: React.FC = () => {
                     <div className="grid grid-cols-2 gap-8 mb-8 text-sm">
                         <div className="flex">
                             <span className="font-bold text-gray-800 w-32">CRF ID:</span>
-                            <span className="text-gray-900">{selectedCRF.id}</span>
+                            <span className="text-gray-900">{selectedCRF.crfId}</span>
                         </div>
                         <div className="flex">
                             <span className="font-bold text-gray-800 w-32">CRF Type:</span>
@@ -492,7 +548,7 @@ export const CRFPage: React.FC = () => {
                                 <div className="border-t-2 border-gray-900 pt-2 mt-2">
                                     <p className="text-sm text-gray-900 font-medium">{selectedCRF.contact}</p>
                                     <p className="text-xs text-gray-600 mt-1">{selectedCRF.customer}</p>
-                                    <p className="text-xs text-gray-600">Date: {new Date(selectedCRF.date).toLocaleDateString('en-GB')}</p>
+                                    <p className="text-xs text-gray-600">Date: {new Date(selectedCRF.receptionDate).toLocaleDateString('en-GB')}</p>
                                 </div>
                             </div>
                         </div>
@@ -578,26 +634,31 @@ export const CRFPage: React.FC = () => {
 
                             <Select
                                 label="Customer"
-                                value={formData.customer ? mockCustomers.find(c => c.name === formData.customer)?.id || '' : ''}
+                                value={formData.customer ? mockCustomers.find(c => c.name === formData.customer)?.id || 'new' : ''}
                                 onChange={handleCustomerChange}
                                 options={[
-                                    { value: '', label: 'Select customer or enter manually' },
-                                    ...mockCustomers.map(c => ({ value: c.id, label: c.name }))
+                                    { value: '', label: 'Select Customer' },
+                                    ...mockCustomers.map(c => ({ value: c.id, label: c.name })),
+                                    { value: 'new', label: '+ Add New Customer' }
                                 ]}
                                 required
                             />
 
-                            <Input
-                                label="Customer Name (or edit)"
-                                value={formData.customer}
-                                onChange={(e) => setFormData({ ...formData, customer: e.target.value })}
-                                required
-                            />
+                            {isNewCustomer && (
+                                <Input
+                                    label="Customer Name"
+                                    value={formData.customer}
+                                    onChange={(e) => setFormData({ ...formData, customer: e.target.value })}
+                                    placeholder="Enter customer name"
+                                    required
+                                />
+                            )}
 
                             <Input
                                 label="Address"
                                 value={formData.address}
                                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                disabled={!isNewCustomer && formData.customer !== ''}
                                 required
                             />
 
@@ -605,6 +666,7 @@ export const CRFPage: React.FC = () => {
                                 label="Contact Person"
                                 value={formData.contact}
                                 onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
+                                disabled={!isNewCustomer && formData.customer !== ''}
                                 required
                             />
 
@@ -613,6 +675,7 @@ export const CRFPage: React.FC = () => {
                                 type="email"
                                 value={formData.email}
                                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                disabled={!isNewCustomer && formData.customer !== ''}
                                 required
                             />
 
@@ -801,7 +864,7 @@ export const CRFPage: React.FC = () => {
             {/* CRF Table */}
             <Card>
                 <h2 className="text-xl font-semibold text-gray-800 mb-6">All CRFs</h2>
-                {crfs.length === 0 ? (
+                {!crfs || crfs.length === 0 ? (
                     <p className="text-gray-500 text-center py-8">No CRFs yet. Create your first CRF above.</p>
                 ) : (
                     <div className="overflow-x-auto">
@@ -822,7 +885,7 @@ export const CRFPage: React.FC = () => {
                             <TableBody>
                                 {crfs.map((crf) => (
                                     <TableRow key={crf.id}>
-                                        <TableCell className="font-semibold">{crf.id}</TableCell>
+                                        <TableCell className="font-semibold">{crf.crfId}</TableCell>
                                         <TableCell>
                                             <Badge status={crf.crfType === 'CS' ? 'approved' : 'pending'}>
                                                 {crf.crfType}
@@ -845,7 +908,7 @@ export const CRFPage: React.FC = () => {
                                                 )}
                                             </div>
                                         </TableCell>
-                                        <TableCell>{new Date(crf.date).toLocaleDateString()}</TableCell>
+                                        <TableCell>{new Date(crf.receptionDate).toLocaleDateString()}</TableCell>
                                         <TableCell>
                                             <select
                                                 value={crf.status}

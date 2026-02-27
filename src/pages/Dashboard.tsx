@@ -39,13 +39,13 @@ export const Dashboard: React.FC = () => {
     const onTrackTasks = mockPendingTasks.filter(t => t.status === 'On Track');
 
     // Use real CRF data for stats
-    const activeSamples = samples.filter(s => s.status === 'testing').length;
-    const pendingReview = crfs.filter(c => c.status === 'review').length;
+    const activeSamples = samples?.filter(s => s.status === 'testing').length || 0;
+    const pendingReview = crfs?.filter(c => c.status === 'review').length || 0;
 
     const stats = [
         {
             title: 'Total CRFs',
-            value: crfs.length.toString(),
+            value: (crfs?.length || 0).toString(),
             icon: FileText,
             color: 'bg-primary-light',
             iconColor: 'text-primary-500',

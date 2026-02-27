@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.Year;
 import java.util.List;
 
 @Service
@@ -46,7 +47,7 @@ public class CRFService {
 
     @Transactional
     public CRF createCRF(CRF crf) {
-        // Generate CRF ID if not provided
+        // Generate CRF ID if not provided (format: CRF/YY/sequence)
         if (crf.getCrfId() == null || crf.getCrfId().isEmpty()) {
             crf.setCrfId(generateCRFId());
         }
@@ -68,7 +69,7 @@ public class CRFService {
 
         CRF savedCRF = crfRepository.save(crf);
 
-        // Create samples for the CRF
+        // Create samples for the CRF (format: CS/YY/sequence or LS/YY/sequence)
         if (crf.getNumberOfSamples() != null && crf.getNumberOfSamples() > 0) {
             createSamplesForCRF(savedCRF);
         }
@@ -115,17 +116,35 @@ public class CRFService {
         return crfRepository.countByStatus(status);
     }
 
+    /**
+     * Generate CRF ID in format: CRF/YY/sequence
+     * Example: CRF/26/1, CRF/26/2, etc.
+     */
     private String generateCRFId() {
-        long count = crfRepository.count();
-        return String.format("CRF-%04d", count + 1);
+        int currentYear = Year.now().getValue() % 100; // Get last 2 digits of year
+        long countThisYear = crfRepository.countByYear(Year.now().getValue());
+        long sequence = countThisYear + 1;
+        return String.format("CRF/%02d/%d", currentYear, sequence);
     }
 
+    /**
+     * Create samples for CRF with IDs in format: CS/YY/sequence or LS/YY/sequence
+     * Example: CS/26/1, CS/26/2, LS/26/1, etc.
+     */
     private void createSamplesForCRF(CRF crf) {
+        String samplePrefix = crf.getCrfType(); // CS or LS
+        int currentYear = Year.now().getValue() % 100; // Get last 2 digits of year
+        String yearPrefix = String.format("%s/%02d/", samplePrefix, currentYear);
+        
+        // Get count of existing samples with this prefix to continue sequence
+        long existingSamplesCount = sampleRepository.countBySampleIdPrefix(yearPrefix);
+        
         for (int i = 1; i <= crf.getNumberOfSamples(); i++) {
+            long sequence = existingSamplesCount + i;
             Sample sample = new Sample();
-            sample.setSampleId(crf.getCrfId() + "-" + String.format("%02d", i));
+            sample.setSampleId(String.format("%s/%02d/%d", samplePrefix, currentYear, sequence));
             sample.setCrf(crf);
-            sample.setDescription("Sample " + i);
+            sample.setDescription("Sample " + i + " for " + crf.getCustomer());
             sample.setStatus("pending");
             sampleRepository.save(sample);
         }

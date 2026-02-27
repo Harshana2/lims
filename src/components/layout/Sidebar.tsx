@@ -13,6 +13,7 @@ import {
     Calendar,
     Settings,
     FileSearch,
+    Layers,
 } from 'lucide-react';
 
 const menuItems = [
@@ -25,6 +26,7 @@ const menuItems = [
     { path: '/environmental-sampling', icon: MapPin, label: 'Environmental Sampling' },
     { path: '/review-sign', icon: CheckCircle, label: 'Review & Sign' },
     { path: '/report-generation', icon: FileBarChart, label: 'Report Generation' },
+    { path: '/report-templates', icon: Layers, label: 'Report Templates' },
     { path: '/sample-collection', icon: Calendar, label: 'Sample Collection' },
     { path: '/audit-log', icon: FileSearch, label: 'Audit Log' },
     { path: '/configuration', icon: Settings, label: 'Configuration' },

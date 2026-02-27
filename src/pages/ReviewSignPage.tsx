@@ -1,30 +1,62 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/Table';
 import { SignatureCanvas } from '../components/SignatureCanvas';
-import { useWorkflow } from '../context/WorkflowContext';
+import { crfService, sampleService, type CRF, type Sample } from '../services';
 import { CheckCircle, XCircle } from 'lucide-react';
 
 export const ReviewSignPage: React.FC = () => {
-    const { crfs, updateCRFStatus } = useWorkflow();
+    const [crfs, setCrfs] = useState<CRF[]>([]);
+    const [samples, setSamples] = useState<Sample[]>([]);
+    const [loading, setLoading] = useState(true);
     const [selectedCRFId, setSelectedCRFId] = useState<string>('');
     const [reviewerName, setReviewerName] = useState('');
     const [reviewerSignature, setReviewerSignature] = useState('');
     const [comments, setComments] = useState('');
 
-    // Get CRFs that are in 'review' status
-    const reviewCRFs = crfs.filter(c => c.status === 'review');
-    const selectedCRF = crfs.find(c => c.id === selectedCRFId);
+    useEffect(() => {
+        loadReviewCRFs();
+    }, []);
 
-    const handleCRFChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const loadReviewCRFs = async () => {
+        try {
+            setLoading(true);
+            const allCrfs = await crfService.getByStatus('review');
+            setCrfs(allCrfs);
+        } catch (err) {
+            console.error('Failed to load CRFs:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Get CRFs that are in 'review' status
+    const selectedCRF = crfs.find(c => c.id?.toString() === selectedCRFId);
+
+    const handleCRFChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
         const crfId = e.target.value;
         setSelectedCRFId(crfId);
         setComments('');
+
+        if (crfId) {
+            const crf = crfs.find(c => c.id?.toString() === crfId);
+            if (crf && crf.id) {
+                try {
+                    // Load samples for this CRF
+                    const crfSamples = await sampleService.getByCrfId(crf.id);
+                    setSamples(crfSamples);
+                } catch (err) {
+                    console.error('Failed to load samples:', err);
+                }
+            }
+        } else {
+            setSamples([]);
+        }
     };
 
-    const handleApprove = () => {
+    const handleApprove = async () => {
         if (!selectedCRFId) return;
         
         if (!reviewerName || !reviewerSignature) {
@@ -32,18 +64,25 @@ export const ReviewSignPage: React.FC = () => {
             return;
         }
 
-        // TODO: Save reviewer name, signature, and comments to CRF
-        updateCRFStatus(selectedCRFId, 'approved');
-        alert('CRF approved successfully! Ready for report generation.');
-        
-        // Reset form
-        setSelectedCRFId('');
-        setReviewerName('');
-        setReviewerSignature('');
-        setComments('');
+        try {
+            // Update CRF status to approved
+            await crfService.updateStatus(parseInt(selectedCRFId), 'approved');
+            alert('CRF approved successfully! Ready for report generation.');
+            
+            // Reset form and reload CRFs
+            setSelectedCRFId('');
+            setReviewerName('');
+            setReviewerSignature('');
+            setComments('');
+            setSamples([]);
+            await loadReviewCRFs();
+        } catch (err) {
+            console.error('Failed to approve CRF:', err);
+            alert('Failed to approve CRF. Please try again.');
+        }
     };
 
-    const handleReject = () => {
+    const handleReject = async () => {
         if (!selectedCRFId) return;
         
         if (!reviewerName || !comments) {
@@ -51,18 +90,36 @@ export const ReviewSignPage: React.FC = () => {
             return;
         }
 
-        // Return to testing status for corrections
-        updateCRFStatus(selectedCRFId, 'testing');
-        alert('CRF rejected and returned to testing. Please add corrections.');
-        
-        // Reset form
-        setSelectedCRFId('');
-        setReviewerName('');
-        setReviewerSignature('');
-        setComments('');
+        try {
+            // Return to testing status for corrections
+            await crfService.updateStatus(parseInt(selectedCRFId), 'testing');
+            alert('CRF rejected and returned to testing. Please add corrections.');
+            
+            // Reset form and reload CRFs
+            setSelectedCRFId('');
+            setReviewerName('');
+            setReviewerSignature('');
+            setComments('');
+            setSamples([]);
+            await loadReviewCRFs();
+        } catch (err) {
+            console.error('Failed to reject CRF:', err);
+            alert('Failed to reject CRF. Please try again.');
+        }
     };
 
-    if (reviewCRFs.length === 0) {
+    if (loading) {
+        return (
+            <div>
+                <h1 className="text-3xl font-bold text-gray-800 mb-8">Review & Sign</h1>
+                <Card>
+                    <p className="text-gray-500">Loading...</p>
+                </Card>
+            </div>
+        );
+    }
+
+    if (crfs.length === 0) {
         return (
             <div>
                 <h1 className="text-3xl font-bold text-gray-800 mb-8">Review & Sign</h1>
@@ -94,9 +151,9 @@ export const ReviewSignPage: React.FC = () => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                     <option value="">-- Select a CRF in Review Status --</option>
-                    {reviewCRFs.map(crf => (
-                        <option key={crf.id} value={crf.id}>
-                            {crf.id} - {crf.customer} - {crf.sampleType} ({crf.crfType})
+                    {crfs.map(crf => (
+                        <option key={crf.id} value={crf.id?.toString()}>
+                            {crf.crfId} - {crf.customer} - {crf.sampleType} ({crf.crfType})
                         </option>
                     ))}
                 </select>
@@ -110,7 +167,7 @@ export const ReviewSignPage: React.FC = () => {
                         <div className="grid grid-cols-3 gap-4">
                             <div>
                                 <p className="text-sm text-gray-600">CRF ID</p>
-                                <p className="font-medium">{selectedCRF.id}</p>
+                                <p className="font-medium">{selectedCRF.crfId}</p>
                             </div>
                             <div>
                                 <p className="text-sm text-gray-600">Customer</p>
@@ -142,100 +199,58 @@ export const ReviewSignPage: React.FC = () => {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Sample</TableHead>
+                                        <TableHead>Sample ID</TableHead>
+                                        <TableHead>Description</TableHead>
                                         <TableHead>Test Parameter</TableHead>
                                         <TableHead>Result/Value</TableHead>
-                                        <TableHead>Unit</TableHead>
                                         <TableHead>Assigned Chemist</TableHead>
                                         <TableHead>Status</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {selectedCRF.testParameters.map((param, paramIndex) => 
-                                        Array.from({ length: selectedCRF.numberOfSamples }, (_, sampleIndex) => (
-                                            <TableRow key={`${paramIndex}-${sampleIndex}`}>
-                                                <TableCell>Sample {sampleIndex + 1}</TableCell>
-                                                <TableCell className="font-medium">{param}</TableCell>
-                                                <TableCell>
-                                                    <span className="text-primary-600 font-semibold">
-                                                        {/* TODO: Get actual test values from context */}
-                                                        [Test Value]
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell className="text-gray-600">
-                                                    {/* TODO: Get actual units from parameter data */}
-                                                    [Unit]
-                                                </TableCell>
-                                                <TableCell>
-                                                    {/* TODO: Get assigned chemist from context */}
-                                                    [Chemist Name]
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge status="approved">Completed</Badge>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
+                                    {samples.length > 0 ? (
+                                        samples.flatMap(sample =>
+                                            selectedCRF.testParameters.map(param => {
+                                                const testValue = sample.testValues?.[param] || 'N/A';
+                                                const testStatus = sample.testStatus?.[param] || 'pending';
+                                                return (
+                                                    <TableRow key={`${sample.id}-${param}`}>
+                                                        <TableCell className="font-semibold">{sample.sampleId}</TableCell>
+                                                        <TableCell>{sample.description}</TableCell>
+                                                        <TableCell className="font-medium">{param}</TableCell>
+                                                        <TableCell>
+                                                            <span className="text-primary-600 font-semibold">
+                                                                {testValue}
+                                                            </span>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {sample.assignedTo || 'Unassigned'}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Badge status={testStatus === 'completed' ? 'approved' : 'pending'}>
+                                                                {testStatus}
+                                                            </Badge>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })
+                                        )
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell className="text-center text-gray-500">
+                                                No samples or test results available
+                                            </TableCell>
+                                            <TableCell> </TableCell>
+                                            <TableCell> </TableCell>
+                                            <TableCell> </TableCell>
+                                            <TableCell> </TableCell>
+                                            <TableCell> </TableCell>
+                                        </TableRow>
                                     )}
                                 </TableBody>
                             </Table>
                         </div>
                     </Card>
-
-                    {/* Environmental Sampling Data (if LS type) */}
-                    {selectedCRF.environmentalData && (
-                        <Card className="mb-6">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-3 border-b">
-                                Environmental Sampling Data
-                            </h3>
-                            <div className="mb-4 p-4 bg-blue-50 rounded">
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <span className="font-medium">Sampling Points:</span> {selectedCRF.environmentalData.samplingPoints.length}
-                                    </div>
-                                    <div>
-                                        <span className="font-medium">Map Type:</span> {selectedCRF.environmentalData.mapType === 'satellite' ? 'Satellite View' : 'Standard Map'}
-                                    </div>
-                                    <div>
-                                        <span className="font-medium">Submitted At:</span> {new Date(selectedCRF.environmentalData.submittedAt).toLocaleString()}
-                                    </div>
-                                    <div>
-                                        <span className="font-medium">Submitted By:</span> {selectedCRF.environmentalData.submittedBy}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            {selectedCRF.environmentalData.samplingPoints.map((point) => (
-                                <div key={point.id} className="mb-4 border rounded p-4">
-                                    <h5 className="font-bold mb-2">Point {point.pointNumber}: {point.locationName}</h5>
-                                    <p className="text-xs text-gray-600 mb-3">
-                                        GPS: {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
-                                    </p>
-                                    <table className="w-full text-sm border">
-                                        <thead className="bg-gray-100">
-                                            <tr>
-                                                <th className="border p-2 text-left">Parameter</th>
-                                                <th className="border p-2 text-left">Value</th>
-                                                <th className="border p-2 text-left">Unit</th>
-                                                <th className="border p-2 text-left">Measured By</th>
-                                                <th className="border p-2 text-left">Remarks</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {point.measurements.map((m, idx) => (
-                                                <tr key={idx}>
-                                                    <td className="border p-2">{m.parameter}</td>
-                                                    <td className="border p-2 font-semibold">{m.value}</td>
-                                                    <td className="border p-2">{m.unit}</td>
-                                                    <td className="border p-2">{m.measuredBy}</td>
-                                                    <td className="border p-2">{m.remarks || '-'}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ))}
-                        </Card>
-                    )}
 
                     {/* Review Section */}
                     <Card className="mb-6">

@@ -2,6 +2,8 @@ package com.lindel.lindel.repository;
 
 import com.lindel.lindel.entity.CRF;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -28,4 +30,7 @@ public interface CRFRepository extends JpaRepository<CRF, Long> {
     Long countByStatus(String status);
     
     Boolean existsByCrfId(String crfId);
+    
+    @Query("SELECT COUNT(c) FROM CRF c WHERE YEAR(c.createdAt) = :year")
+    Long countByYear(@Param("year") int year);
 }

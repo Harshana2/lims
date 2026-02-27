@@ -13,6 +13,7 @@ import { DataEntryPage } from './pages/DataEntryPage';
 import { EnvironmentalSamplingPage } from './pages/EnvironmentalSamplingPage';
 import { ReviewSignPage } from './pages/ReviewSignPage';
 import { ReportGenerationPage } from './pages/ReportGenerationPage';
+import { ReportTemplateManagementPage } from './pages/ReportTemplateManagementPage';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { ConfigurationPage } from './pages/ConfigurationPage';
 
@@ -33,6 +34,7 @@ function App() {
             <Route path="/environmental-sampling" element={<EnvironmentalSamplingPage />} />
             <Route path="/review-sign" element={<ReviewSignPage />} />
             <Route path="/report-generation" element={<ReportGenerationPage />} />
+            <Route path="/report-templates" element={<ReportTemplateManagementPage />} />
             <Route path="/audit-log" element={<AuditLogPage />} />
             <Route path="/configuration" element={<ConfigurationPage />} />
           </Route>

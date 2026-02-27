@@ -53,8 +53,7 @@ public class CRF {
     
     private String receivedBy;
     
-    @Lob
-    @Column(length = 10000)
+    @Column(columnDefinition = "TEXT")
     private String signature; // Base64 encoded signature
     
     @Column(nullable = false)

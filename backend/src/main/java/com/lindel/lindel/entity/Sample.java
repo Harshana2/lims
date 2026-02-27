@@ -1,5 +1,6 @@
 package com.lindel.lindel.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -25,6 +26,7 @@ public class Sample {
     @Column(unique = true, nullable = false)
     private String sampleId; // e.g., "SMP-001-01"
     
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "crf_id", nullable = false)
     private CRF crf;
@@ -54,8 +56,7 @@ public class Sample {
     private LocalDateTime assignedDate;
     private LocalDateTime completedDate;
     
-    @Lob
-    @Column(length = 5000)
+    @Column(columnDefinition = "TEXT")
     private String notes;
     
     @CreationTimestamp

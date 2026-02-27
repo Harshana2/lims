@@ -1,21 +1,48 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/Table';
 import { SignatureCanvas } from '../components/SignatureCanvas';
-import { useWorkflow } from '../context/WorkflowContext';
+import { quotationService, requestService, type Quotation, type Request } from '../services';
 import { mockParameters } from '../data/mockData';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 export const QuotationPage: React.FC = () => {
-    const { getConfirmedRequests, quotations, createQuotation, updateQuotation } = useWorkflow();
+    const [requests, setRequests] = useState<Request[]>([]);
+    const [quotations, setQuotations] = useState<Quotation[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [selectedRequestId, setSelectedRequestId] = useState<string>('');
     const [signature, setSignature] = useState('');
     const [showPreview, setShowPreview] = useState(false);
     const [isCustomMode, setIsCustomMode] = useState(false);
     const quotationRef = useRef<HTMLDivElement>(null);
+
+    // Load confirmed requests and quotations from backend
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        try {
+            setLoading(true);
+            const [confirmedReqs, allQuotations] = await Promise.all([
+                requestService.getByStatus('confirmed'),
+                quotationService.getAll()
+            ]);
+            setRequests(confirmedReqs);
+            setQuotations(allQuotations);
+            setError('');
+        } catch (err) {
+            console.error('Failed to load data:', err);
+            setError('Failed to load requests and quotations. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // Custom quotation state
     const [customQuotation, setCustomQuotation] = useState({
@@ -29,33 +56,31 @@ export const QuotationPage: React.FC = () => {
         priority: 'Normal',
     });
 
-    const confirmedRequests = getConfirmedRequests();
-    const selectedRequest = confirmedRequests.find(req => req.id === selectedRequestId);
-    const existingQuotation = quotations.find(q => q.requestId === selectedRequestId);
+    const selectedRequest = requests.find(req => req.id?.toString() === selectedRequestId);
+    const existingQuotation = quotations.find(q => q.requestId?.toString() === selectedRequestId);
 
     const [parameters, setParameters] = useState<Array<{
-        name: string;
-        unitPrice: number;
+        parameter: string;
         quantity: number;
-        total: number;
-    }>>(existingQuotation?.parameters || []);
+        unitPrice: number;
+        totalPrice: number;
+    }>>(existingQuotation?.items || []);
 
-    React.useEffect(() => {
+    useEffect(() => {
         if (selectedRequest && !existingQuotation) {
             // Initialize parameters from selected request
-            const initParams = selectedRequest.testParameters.map(paramName => {
+            const initParams = selectedRequest.parameters.map(paramName => {
                 const paramData = mockParameters.find(p => p.name === paramName);
                 return {
-                    name: paramName,
+                    parameter: paramName,
                     unitPrice: paramData?.defaultPrice || 0,
                     quantity: selectedRequest.numberOfSamples,
-                    total: (paramData?.defaultPrice || 0) * selectedRequest.numberOfSamples,
+                    totalPrice: (paramData?.defaultPrice || 0) * selectedRequest.numberOfSamples,
                 };
             });
             setParameters(initParams);
         } else if (existingQuotation) {
-            setParameters(existingQuotation.parameters);
-            setSignature(existingQuotation.signature);
+            setParameters(existingQuotation.items);
         }
     }, [selectedRequestId, selectedRequest, existingQuotation]);
 
@@ -64,17 +89,17 @@ export const QuotationPage: React.FC = () => {
         updated[index] = {
             ...updated[index],
             [field]: value,
-            total: field === 'unitPrice' ? value * updated[index].quantity : updated[index].unitPrice * value,
+            totalPrice: field === 'unitPrice' ? value * updated[index].quantity : updated[index].unitPrice * value,
         };
         setParameters(updated);
     };
 
     const handleAddParameter = () => {
         setParameters([...parameters, {
-            name: '',
+            parameter: '',
             unitPrice: 0,
             quantity: isCustomMode ? customQuotation.numberOfSamples : 1,
-            total: 0,
+            totalPrice: 0,
         }]);
     };
 
@@ -87,84 +112,83 @@ export const QuotationPage: React.FC = () => {
         const paramData = mockParameters.find(p => p.name === name);
         updated[index] = {
             ...updated[index],
-            name,
+            parameter: name,
             unitPrice: paramData?.defaultPrice || updated[index].unitPrice,
-            total: (paramData?.defaultPrice || updated[index].unitPrice) * updated[index].quantity,
+            totalPrice: (paramData?.defaultPrice || updated[index].unitPrice) * updated[index].quantity,
         };
         setParameters(updated);
     };
 
-    const grandTotal = parameters.reduce((sum, param) => sum + param.total, 0);
+    const grandTotal = parameters.reduce((sum, param) => sum + param.totalPrice, 0);
 
-    const handleSaveQuotation = () => {
-        if (isCustomMode) {
-            // Validate custom quotation
-            if (!customQuotation.customer || !customQuotation.address || !customQuotation.contact || 
-                !customQuotation.email || !customQuotation.sampleType || parameters.length === 0) {
-                alert('Please fill all required fields and add at least one parameter');
-                return;
-            }
+    const handleSaveQuotation = async () => {
+        try {
+            if (isCustomMode) {
+                // Validate custom quotation
+                if (!customQuotation.customer || !customQuotation.contact || 
+                    !customQuotation.email || parameters.length === 0) {
+                    alert('Please fill all required fields and add at least one parameter');
+                    return;
+                }
 
-            const customId = `CUSTOM-${Date.now()}`;
-            const quotationData = {
-                requestId: customId,
-                customer: customQuotation.customer,
-                address: customQuotation.address,
-                contact: customQuotation.contact,
-                email: customQuotation.email,
-                sampleType: customQuotation.sampleType,
-                numberOfSamples: customQuotation.numberOfSamples,
-                samplingType: customQuotation.samplingType,
-                priority: customQuotation.priority,
-                parameters,
-                grandTotal,
-                signature,
-                approved: true,
-            };
+                const tax = grandTotal * 0.1; // 10% tax
+                const quotationData = {
+                    customer: customQuotation.customer,
+                    items: parameters,
+                    subtotal: grandTotal,
+                    tax: tax,
+                    total: grandTotal + tax,
+                    status: 'draft',
+                    notes: `Sample Type: ${customQuotation.sampleType}, Samples: ${customQuotation.numberOfSamples}`,
+                    preparedBy: 'Current User', // TODO: Get from auth context
+                };
 
-            createQuotation(quotationData);
-            alert('Custom quotation saved successfully!');
-            
-            // Reset form
-            setCustomQuotation({
-                customer: '',
-                address: '',
-                contact: '',
-                email: '',
-                sampleType: '',
-                numberOfSamples: 1,
-                samplingType: 'One Time',
-                priority: 'Normal',
-            });
-            setParameters([]);
-            setSignature('');
-        } else {
-            // From request mode
-            if (!selectedRequest) return;
-
-            const quotationData = {
-                requestId: selectedRequest.id,
-                customer: selectedRequest.customer,
-                address: selectedRequest.address,
-                contact: selectedRequest.contact,
-                email: selectedRequest.email,
-                sampleType: selectedRequest.sampleType,
-                numberOfSamples: selectedRequest.numberOfSamples,
-                samplingType: selectedRequest.samplingType,
-                priority: selectedRequest.priority,
-                parameters,
-                grandTotal,
-                signature,
-                approved: true,
-            };
-
-            if (existingQuotation) {
-                updateQuotation(selectedRequest.id, quotationData);
+                await quotationService.create(quotationData);
+                alert('Custom quotation saved successfully!');
+                
+                // Reset form
+                setCustomQuotation({
+                    customer: '',
+                    address: '',
+                    contact: '',
+                    email: '',
+                    sampleType: '',
+                    numberOfSamples: 1,
+                    samplingType: 'One Time',
+                    priority: 'Normal',
+                });
+                setParameters([]);
+                setSignature('');
+                await loadData();
             } else {
-                createQuotation(quotationData);
-            }
+                // From request mode
+                if (!selectedRequest || !selectedRequest.id) return;
 
-            alert('Quotation saved successfully!');
+                const tax = grandTotal * 0.1; // 10% tax
+                const quotationData = {
+                    requestId: selectedRequest.id,
+                    customer: selectedRequest.customer,
+                    items: parameters,
+                    subtotal: grandTotal,
+                    tax: tax,
+                    total: grandTotal + tax,
+                    status: 'sent',
+                    notes: selectedRequest.notes,
+                    preparedBy: 'Current User', // TODO: Get from auth context
+                };
+
+                if (existingQuotation && existingQuotation.id) {
+                    await quotationService.update(existingQuotation.id, quotationData);
+                } else {
+                    await quotationService.create(quotationData);
+                }
+
+                alert('Quotation saved successfully!');
+                await loadData();
+            }
+        } catch (err) {
+            console.error('Failed to save quotation:', err);
+            alert('Failed to save quotation. Please try again.');
         }
     };
 
@@ -244,13 +268,59 @@ export const QuotationPage: React.FC = () => {
                                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                                 >
                                     <option value="">-- Select a Request --</option>
-                                    {confirmedRequests.map(req => (
+                                    {requests.map(req => (
                                         <option key={req.id} value={req.id}>
-                                            {req.id} - {req.customer} ({req.testParameters.join(', ')})
+                                            Request #{req.requestId || req.id} - {req.customer} | {req.sampleType} | {req.parameters.slice(0, 3).join(', ')}{req.parameters.length > 3 ? ` +${req.parameters.length - 3} more` : ''}
                                         </option>
                                     ))}
                                 </select>
                             </Card>
+
+                            {selectedRequest && (
+                                <Card className="mb-6">
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-3 border-b">Request Details</h3>
+                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                        <div>
+                                            <span className="font-medium text-gray-600">Customer:</span>
+                                            <p className="text-gray-800 mt-1">{selectedRequest.customer}</p>
+                                        </div>
+                                        <div>
+                                            <span className="font-medium text-gray-600">Contact:</span>
+                                            <p className="text-gray-800 mt-1">{selectedRequest.contact}</p>
+                                        </div>
+                                        <div>
+                                            <span className="font-medium text-gray-600">Email:</span>
+                                            <p className="text-gray-800 mt-1">{selectedRequest.email}</p>
+                                        </div>
+                                        <div>
+                                            <span className="font-medium text-gray-600">Sample Type:</span>
+                                            <p className="text-gray-800 mt-1">{selectedRequest.sampleType}</p>
+                                        </div>
+                                        <div>
+                                            <span className="font-medium text-gray-600">Number of Samples:</span>
+                                            <p className="text-gray-800 mt-1">{selectedRequest.numberOfSamples}</p>
+                                        </div>
+                                        <div>
+                                            <span className="font-medium text-gray-600">Priority:</span>
+                                            <p className="text-gray-800 mt-1">
+                                                <Badge status={selectedRequest.priority === 'Urgent' ? 'pending' : 'approved'}>
+                                                    {selectedRequest.priority}
+                                                </Badge>
+                                            </p>
+                                        </div>
+                                        <div className="col-span-2">
+                                            <span className="font-medium text-gray-600">Test Parameters:</span>
+                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                {selectedRequest.parameters.map(param => (
+                                                    <span key={param} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">
+                                                        {param}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Card>
+                            )}
                         </>
                     ) : (
                         /* Custom Quotation Mode */
@@ -337,7 +407,7 @@ export const QuotationPage: React.FC = () => {
                                         </div>
                                         <div>
                                             <p className="text-sm text-gray-600">Address</p>
-                                            <p className="font-medium">{selectedRequest.address}</p>
+                                            <p className="font-medium">{selectedRequest.contact}</p>
                                         </div>
                                         <div>
                                             <p className="text-sm text-gray-600">Contact Person</p>
@@ -378,7 +448,7 @@ export const QuotationPage: React.FC = () => {
                                                     <td className="px-4 py-3">
                                                         {isCustomMode ? (
                                                             <select
-                                                                value={param.name}
+                                                                value={param.parameter}
                                                                 onChange={(e) => handleParameterNameChange(index, e.target.value)}
                                                                 className="w-full px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
                                                             >
@@ -395,7 +465,7 @@ export const QuotationPage: React.FC = () => {
                                                                 }
                                                             </select>
                                                         ) : (
-                                                            <span className="font-medium">{param.name}</span>
+                                                            <span className="font-medium">{param.parameter}</span>
                                                         )}
                                                     </td>
                                                     <td className="px-4 py-3">
@@ -414,7 +484,7 @@ export const QuotationPage: React.FC = () => {
                                                             className="w-full px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-primary-500"
                                                         />
                                                     </td>
-                                                    <td className="px-4 py-3 font-semibold text-primary-700">{param.total.toLocaleString()}</td>
+                                                    <td className="px-4 py-3 font-semibold text-primary-700">{param.totalPrice.toLocaleString()}</td>
                                                     {isCustomMode && (
                                                         <td className="px-4 py-3">
                                                             <button
@@ -555,10 +625,10 @@ export const QuotationPage: React.FC = () => {
                                     {parameters.map((param, index) => (
                                         <tr key={index} className="hover:bg-gray-50">
                                             <td className="border-2 border-gray-900 px-4 py-3 text-sm text-center">{index + 1}</td>
-                                            <td className="border-2 border-gray-900 px-4 py-3 text-sm font-medium">{param.name}</td>
+                                            <td className="border-2 border-gray-900 px-4 py-3 text-sm font-medium">{param.parameter}</td>
                                             <td className="border-2 border-gray-900 px-4 py-3 text-sm text-center">{param.unitPrice.toLocaleString()}</td>
                                             <td className="border-2 border-gray-900 px-4 py-3 text-sm text-center">{param.quantity}</td>
-                                            <td className="border-2 border-gray-900 px-4 py-3 text-sm text-right font-semibold">{param.total.toLocaleString()}</td>
+                                            <td className="border-2 border-gray-900 px-4 py-3 text-sm text-right font-semibold">{param.totalPrice.toLocaleString()}</td>
                                         </tr>
                                     ))}
                                     <tr className="bg-blue-100">
@@ -616,6 +686,118 @@ export const QuotationPage: React.FC = () => {
                     </div>
                 </>
             )}
+
+            {/* Quotations History Table */}
+            <Card className="mt-8">
+                <h2 className="text-xl font-semibold text-gray-800 mb-6">Quotation History</h2>
+                {loading ? (
+                    <p className="text-gray-500 text-center py-8">Loading quotations...</p>
+                ) : error ? (
+                    <p className="text-red-500 text-center py-8">{error}</p>
+                ) : quotations.length === 0 ? (
+                    <p className="text-gray-500 text-center py-8">No quotations created yet.</p>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Quotation ID</TableHead>
+                                    <TableHead>Request ID</TableHead>
+                                    <TableHead>Customer</TableHead>
+                                    <TableHead>Items</TableHead>
+                                    <TableHead>Total Amount</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Created Date</TableHead>
+                                    <TableHead>Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {quotations.map((quotation) => {
+                                    const relatedRequest = requests.find(r => r.id === quotation.requestId);
+                                    return (
+                                        <TableRow key={quotation.id}>
+                                            <TableCell className="font-medium">
+                                                {quotation.quotationId || `QT-${quotation.id}`}
+                                            </TableCell>
+                                            <TableCell>
+                                                {relatedRequest?.requestId || quotation.requestId || 'Custom'}
+                                            </TableCell>
+                                            <TableCell>{quotation.customer}</TableCell>
+                                            <TableCell>
+                                                <div className="text-xs">
+                                                    {quotation.items.slice(0, 2).map((item, idx) => (
+                                                        <div key={idx}>{item.parameter}</div>
+                                                    ))}
+                                                    {quotation.items.length > 2 && (
+                                                        <span className="text-gray-500">+{quotation.items.length - 2} more</span>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="font-semibold">
+                                                LKR {quotation.total.toLocaleString()}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge status={quotation.status === 'approved' ? 'approved' : 'pending'}>
+                                                    {quotation.status}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                {quotation.createdAt ? new Date(quotation.createdAt).toLocaleDateString() : 'N/A'}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex gap-2">
+                                                    <Button
+                                                        onClick={() => {
+                                                            if (quotation.requestId) {
+                                                                setSelectedRequestId(quotation.requestId.toString());
+                                                            }
+                                                            setParameters(quotation.items);
+                                                            setShowPreview(true);
+                                                        }}
+                                                        className="text-xs px-3 py-1"
+                                                    >
+                                                        View
+                                                    </Button>
+                                                    <Button
+                                                        onClick={async () => {
+                                                            // Load quotation data
+                                                            if (quotation.requestId) {
+                                                                setSelectedRequestId(quotation.requestId.toString());
+                                                            }
+                                                            setParameters(quotation.items);
+                                                            setShowPreview(true);
+                                                            // Wait for preview to render
+                                                            await new Promise(resolve => setTimeout(resolve, 500));
+                                                            // Generate PDF
+                                                            if (!quotationRef.current) return;
+                                                            const canvas = await html2canvas(quotationRef.current, {
+                                                                scale: 2,
+                                                                useCORS: true,
+                                                                logging: false,
+                                                                backgroundColor: '#ffffff',
+                                                            });
+                                                            const imgData = canvas.toDataURL('image/png');
+                                                            const pdf = new jsPDF('p', 'mm', 'a4');
+                                                            const pdfWidth = pdf.internal.pageSize.getWidth();
+                                                            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                                                            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                                                            pdf.save(`Quotation_${quotation.quotationId || quotation.id}_${new Date().toISOString().split('T')[0]}.pdf`);
+                                                            setShowPreview(false);
+                                                        }}
+                                                        className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700"
+                                                    >
+                                                        Download
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    </div>
+                )}
+            </Card>
         </div>
     );
 };

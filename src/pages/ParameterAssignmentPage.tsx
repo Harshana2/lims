@@ -1,22 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/Table';
 import { Select } from '../components/ui/Select';
 import { Input } from '../components/ui/Input';
-import { useWorkflow } from '../context/WorkflowContext';
-import { mockChemists, mockParameters } from '../data/mockData';
+import { crfService, chemistService, type CRF, type Chemist } from '../services';
+import { mockParameters } from '../data/mockData';
 
 export const ParameterAssignmentPage: React.FC = () => {
-    const { crfs, getCRFsByStatus, updateCRFStatus } = useWorkflow();
+    const [crfs, setCrfs] = useState<CRF[]>([]);
+    const [chemists, setChemists] = useState<Chemist[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [selectedCRFId, setSelectedCRFId] = useState<string>('');
     const [assignments, setAssignments] = useState<any[]>([]);
     const [isLocked, setIsLocked] = useState(false);
 
-    // Get CRFs with status='submitted' (ready for parameter assignment)
-    const submittedCRFs = getCRFsByStatus('submitted');
-    const selectedCRF = crfs.find(c => c.id === selectedCRFId);
+    // Load submitted CRFs and available chemists
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        try {
+            setLoading(true);
+            const [crfs, availableChemists] = await Promise.all([
+                crfService.getByStatus('submitted'),
+                chemistService.getAll()
+            ]);
+            setCrfs(crfs);
+            setChemists(availableChemists);
+            setError('');
+        } catch (err) {
+            console.error('Failed to load data:', err);
+            setError('Failed to load CRFs and chemists. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const selectedCRF = crfs.find(c => c.id?.toString() === selectedCRFId);
 
     const handleCRFChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const crfId = e.target.value;
@@ -24,24 +48,44 @@ export const ParameterAssignmentPage: React.FC = () => {
         setIsLocked(false);
 
         if (crfId) {
-            const crf = crfs.find(c => c.id === crfId);
+            const crf = crfs.find(c => c.id?.toString() === crfId);
             if (crf) {
                 // Initialize assignments for each sample and parameter
-                const newAssignments = crf.samples.flatMap(sample =>
-                    crf.testParameters.map(paramName => {
+                const samples = crf.samples || [];
+                
+                if (samples.length > 0) {
+                    // If CRF has samples, create assignments for each sample-parameter combination
+                    const newAssignments = samples.flatMap(sample =>
+                        crf.testParameters.map(paramName => {
+                            const param = mockParameters.find(p => p.name === paramName);
+                            return {
+                                sampleId: sample.sampleId,
+                                sampleDescription: sample.description,
+                                parameter: paramName,
+                                unit: param?.unit || '',
+                                method: param?.method || '',
+                                chemist: '',
+                                dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                            };
+                        })
+                    );
+                    setAssignments(newAssignments);
+                } else {
+                    // Fallback: If no samples yet, create one assignment per parameter
+                    const newAssignments = crf.testParameters.map(paramName => {
                         const param = mockParameters.find(p => p.name === paramName);
                         return {
-                            sampleId: sample.id,
-                            sampleDescription: sample.description,
+                            sampleId: 'Pending',
+                            sampleDescription: `Sample for ${paramName}`,
                             parameter: paramName,
                             unit: param?.unit || '',
                             method: param?.method || '',
                             chemist: '',
                             dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                         };
-                    })
-                );
-                setAssignments(newAssignments);
+                    });
+                    setAssignments(newAssignments);
+                }
             }
         } else {
             setAssignments([]);
@@ -49,7 +93,7 @@ export const ParameterAssignmentPage: React.FC = () => {
     };
 
     const handleChemistChange = (index: number, chemistId: string) => {
-        const chemist = mockChemists.find((c) => c.id === chemistId);
+        const chemist = chemists.find((c) => c.id?.toString() === chemistId);
         const updated = [...assignments];
         updated[index].chemist = chemist?.name || '';
         setAssignments(updated);
@@ -61,16 +105,44 @@ export const ParameterAssignmentPage: React.FC = () => {
         setAssignments(updated);
     };
 
-    const handleLock = () => {
+    const handleLock = async () => {
         if (!selectedCRFId) return;
         
-        // Update CRF status to 'assigned'
-        updateCRFStatus(selectedCRFId, 'assigned');
-        setIsLocked(true);
-        alert('Parameters locked! CRF status updated to "Assigned". Chemists can now start testing.');
+        try {
+            // Update CRF status to 'assigned'
+            await crfService.updateStatus(parseInt(selectedCRFId), 'assigned');
+            setIsLocked(true);
+            alert('Parameters locked! CRF status updated to "Assigned". Chemists can now start testing.');
+            await loadData();
+        } catch (err) {
+            console.error('Failed to update CRF status:', err);
+            alert('Failed to lock parameters. Please try again.');
+        }
     };
 
-    if (submittedCRFs.length === 0) {
+    if (loading) {
+        return (
+            <div>
+                <h1 className="text-3xl font-bold text-gray-800 mb-8">Parameter Assignment</h1>
+                <Card>
+                    <p className="text-gray-500">Loading...</p>
+                </Card>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div>
+                <h1 className="text-3xl font-bold text-gray-800 mb-8">Parameter Assignment</h1>
+                <Card>
+                    <p className="text-red-500">{error}</p>
+                </Card>
+            </div>
+        );
+    }
+
+    if (crfs.length === 0) {
         return (
             <div>
                 <h1 className="text-3xl font-bold text-gray-800 mb-8">Parameter Assignment</h1>
@@ -96,9 +168,9 @@ export const ParameterAssignmentPage: React.FC = () => {
                     onChange={handleCRFChange}
                     options={[
                         { value: '', label: 'Select a CRF' },
-                        ...submittedCRFs.map(crf => ({
-                            value: crf.id,
-                            label: `${crf.id} - ${crf.customer} (${crf.numberOfSamples} samples)`
+                        ...crfs.map(crf => ({
+                            value: crf.id?.toString() || '',
+                            label: `${crf.crfId} - ${crf.customer} (${crf.numberOfSamples} samples)`
                         }))
                     ]}
                     required
@@ -165,13 +237,13 @@ export const ParameterAssignmentPage: React.FC = () => {
                                         <TableCell className="text-xs">{assignment.method}</TableCell>
                                         <TableCell>
                                             <select
-                                                value={mockChemists.find((c) => c.name === assignment.chemist)?.id || ''}
+                                                value={chemists.find((c) => c.name === assignment.chemist)?.id || ''}
                                                 onChange={(e) => handleChemistChange(index, e.target.value)}
                                                 disabled={isLocked}
                                                 className="w-full px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100"
                                             >
                                                 <option value="">Select Chemist</option>
-                                                {mockChemists.map((chemist) => (
+                                                {chemists.map((chemist) => (
                                                     <option key={chemist.id} value={chemist.id}>
                                                         {chemist.name}
                                                     </option>

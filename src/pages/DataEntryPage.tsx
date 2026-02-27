@@ -1,47 +1,78 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/Table';
-import { useWorkflow } from '../context/WorkflowContext';
+import { sampleService, crfService, type Sample, type CRF } from '../services';
 
 export const DataEntryPage: React.FC = () => {
-    const { crfs, getCRFsByStatus, addTestResult, updateCRFStatus } = useWorkflow();
+    const [crfs, setCrfs] = useState<CRF[]>([]);
+    const [samples, setSamples] = useState<Sample[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [selectedCRFId, setSelectedCRFId] = useState<string>('');
     const [results, setResults] = useState<any[]>([]);
     const [isSubmitted, setIsSubmitted] = useState(false);
 
-    // Get CRFs with status='assigned' (parameters locked, ready for testing)
-    const assignedCRFs = getCRFsByStatus('assigned');
-    const selectedCRF = crfs.find(c => c.id === selectedCRFId);
+    // Load CRFs with status='assigned'
+    useEffect(() => {
+        loadcrfs();
+    }, []);
 
-    const handleCRFChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const loadcrfs = async () => {
+        try {
+            setLoading(true);
+            const data = await crfService.getByStatus('assigned');
+            setCrfs(data);
+            setError('');
+        } catch (err) {
+            console.error('Failed to load CRFs:', err);
+            setError('Failed to load CRFs. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const selectedCRF = crfs.find(c => c.id?.toString() === selectedCRFId);
+
+    const handleCRFChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
         const crfId = e.target.value;
         setSelectedCRFId(crfId);
         setIsSubmitted(false);
 
         if (crfId) {
-            const crf = crfs.find(c => c.id === crfId);
+            const crf = crfs.find(c => c.id?.toString() === crfId);
             if (crf) {
-                // Initialize results for each sample and parameter
-                const newResults = crf.samples.flatMap(sample =>
-                    crf.testParameters.map(paramName => ({
-                        crfId: crf.id,
-                        sampleId: sample.id,
-                        sampleDescription: sample.description,
-                        parameter: paramName,
-                        testValue: '',
-                        remarks: '',
-                        testedBy: '',
-                        testDate: new Date().toISOString().split('T')[0],
-                    }))
-                );
-                setResults(newResults);
+                try {
+                    // Load samples for this CRF using numeric ID
+                    const crfSamples = await sampleService.getByCrfId(crf.id || 0);
+                    setSamples(crfSamples);
+                    
+                    // Initialize results for each sample and parameter
+                    const newResults = crfSamples.flatMap(sample =>
+                        crf.testParameters.map(paramName => ({
+                            sampleNumericId: sample.id, // Keep numeric ID for API calls
+                            sampleId: sample.sampleId, // Formatted ID for display (e.g., CS/26/1)
+                            sampleDescription: sample.description || `Sample ${sample.sampleId}`,
+                            assignedChemist: sample.assignedTo || 'Unassigned',
+                            parameter: paramName,
+                            testValue: '',
+                            remarks: '',
+                            testedBy: sample.assignedTo || '', // Pre-fill with assigned chemist
+                            testDate: new Date().toISOString().split('T')[0],
+                        }))
+                    );
+                    setResults(newResults);
+                } catch (err) {
+                    console.error('Failed to load samples:', err);
+                    alert('Failed to load samples for this CRF.');
+                }
             }
         } else {
             setResults([]);
+            setSamples([]);
         }
     };
 
@@ -63,7 +94,7 @@ export const DataEntryPage: React.FC = () => {
         setResults(updated);
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (!selectedCRFId) return;
 
         // Validate all results have values
@@ -73,22 +104,51 @@ export const DataEntryPage: React.FC = () => {
             return;
         }
 
-        // Save all results
-        results.forEach(result => {
-            addTestResult(result);
-        });
+        try {
+            // Update each sample with test values
+            for (const result of results) {
+                if (result.sampleNumericId) {
+                    await sampleService.updateTestValues(result.sampleNumericId, {
+                        [result.parameter]: result.testValue
+                    });
+                }
+            }
 
-        // Update CRF status to 'testing' then 'review'
-        updateCRFStatus(selectedCRFId, 'testing');
-        setTimeout(() => {
-            updateCRFStatus(selectedCRFId, 'review');
-        }, 100);
+            // Update CRF status to 'review'
+            await crfService.updateStatus(parseInt(selectedCRFId), 'review');
 
-        setIsSubmitted(true);
-        alert('Test results submitted successfully! CRF moved to Review status.');
+            setIsSubmitted(true);
+            alert('Test results submitted successfully! CRF moved to Review status.');
+            await loadcrfs();
+        } catch (err) {
+            console.error('Failed to submit results:', err);
+            alert('Failed to submit test results. Please try again.');
+        }
     };
 
-    if (assignedCRFs.length === 0) {
+    if (loading) {
+        return (
+            <div>
+                <h1 className="text-3xl font-bold text-gray-800 mb-8">Data Entry - Chemist Results</h1>
+                <Card>
+                    <p className="text-gray-500">Loading...</p>
+                </Card>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div>
+                <h1 className="text-3xl font-bold text-gray-800 mb-8">Data Entry - Chemist Results</h1>
+                <Card>
+                    <p className="text-red-500">{error}</p>
+                </Card>
+            </div>
+        );
+    }
+
+    if (crfs.length === 0) {
         return (
             <div>
                 <h1 className="text-3xl font-bold text-gray-800 mb-8">Data Entry - Chemist Results</h1>
@@ -114,9 +174,9 @@ export const DataEntryPage: React.FC = () => {
                     onChange={handleCRFChange}
                     options={[
                         { value: '', label: 'Select a CRF' },
-                        ...assignedCRFs.map(crf => ({
-                            value: crf.id,
-                            label: `${crf.id} - ${crf.customer} (${crf.numberOfSamples} samples, ${crf.testParameters.length} parameters)`
+                        ...crfs.map(crf => ({
+                            value: crf.id?.toString() || '',
+                            label: `${crf.crfId} - ${crf.customer} (${crf.numberOfSamples} samples, ${crf.testParameters.length} parameters)`
                         }))
                     ]}
                     required
@@ -158,6 +218,7 @@ export const DataEntryPage: React.FC = () => {
                                 <TableRow>
                                     <TableHead>Sample ID</TableHead>
                                     <TableHead>Description</TableHead>
+                                    <TableHead>Assigned Chemist</TableHead>
                                     <TableHead>Parameter</TableHead>
                                     <TableHead>Test Value</TableHead>
                                     <TableHead>Tested By</TableHead>
@@ -170,6 +231,7 @@ export const DataEntryPage: React.FC = () => {
                                     <TableRow key={`${result.sampleId}-${result.parameter}`}>
                                         <TableCell className="font-semibold">{result.sampleId}</TableCell>
                                         <TableCell>{result.sampleDescription}</TableCell>
+                                        <TableCell className="text-gray-700 font-medium">{result.assignedChemist}</TableCell>
                                         <TableCell className="font-medium">{result.parameter}</TableCell>
                                         <TableCell>
                                             <Input
